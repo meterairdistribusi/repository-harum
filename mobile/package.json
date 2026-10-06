@@ -29,7 +29,8 @@
     "web": "expo start --web",
     "build:android": "npx eas-cli@latest build -p android",
     "build:ios": "npx eas-cli@latest build -p ios",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "build:web": "expo export -p web --output-dir ../backend/public/app"
   },
   "private": true,
   "devDependencies": {

@@ -1,0 +1,9 @@
+.git
+**/node_modules
+backend/data
+backend/uploads/*
+backend/public/app
+backend/.env
+mobile/.expo
+mobile/dist
+docs

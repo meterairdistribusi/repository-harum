@@ -47,6 +47,9 @@
     ],
     "extra": {
       "apiUrl": ""
+    },
+    "experiments": {
+      "baseUrl": "/app"
     }
   }
 }

@@ -12,7 +12,11 @@ function resolveBaseUrl() {
   if (fromEnv) return fromEnv.replace(/\/$/, '');
   const fromConfig = Constants.expoConfig?.extra?.apiUrl;
   if (fromConfig) return fromConfig.replace(/\/$/, '');
-  if (Platform.OS === 'web' && typeof window !== 'undefined') return `${window.location.protocol}//${window.location.hostname}:4000`;
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    // Dev server Expo (port 8081) -> backend di port 4000; versi web yang disajikan backend -> origin yang sama
+    if (window.location.port === '8081') return `${window.location.protocol}//${window.location.hostname}:4000`;
+    return window.location.origin;
+  }
   const host = Constants.expoConfig?.hostUri?.split(':')[0];
   if (host) return `http://${host}:4000`;
   return Platform.OS === 'android' ? 'http://10.0.2.2:4000' : 'http://localhost:4000';
@@ -26,6 +30,7 @@ let onUnauthorized = null;
 export function setToken(t) {
   authToken = t;
 }
+export const getToken = () => authToken;
 export function setUnauthorizedHandler(fn) {
   onUnauthorized = fn;
 }

@@ -12,34 +12,30 @@ const CATEGORIES = [
   { name: 'Makanan Siap Saji', slug: 'siap-saji', icon: '🍱', color: '#DCFCE7', description: 'Hidangan hangat siap santap.' },
 ];
 
+// Sub menu per kategori. Bila punya `options`, pelanggan memilih salah satu (harga & stok per pilihan).
+// Format pilihan: [nama, harga, stok]
 const PRODUCTS = {
   'es-kristal': [
-    ['Es Kristal 1 kg', 'Es kristal tabung bening, higienis, tidak cepat cair.', 3000, 'pack', 200, 1],
-    ['Es Kristal 5 kg', 'Kemasan hemat untuk warung, kafe dan acara keluarga.', 12000, 'pack', 120, 1],
-    ['Es Kristal 10 kg', 'Kemasan karung untuk kebutuhan usaha.', 22000, 'karung', 60, 0],
-    ['Es Balok 25 kg', 'Es balok padat untuk pendingin ikan & cool box.', 35000, 'balok', 30, 0],
+    { name: 'Es Kristal Tabung', desc: 'Es kristal tabung bening, higienis, tidak cepat cair. Cocok untuk warung, kafe & acara.', unit: 'pack', featured: 1, option_label: 'Ukuran', options: [['1 kg', 3000, 200], ['5 kg', 12000, 120], ['10 kg', 22000, 60]] },
+    { name: 'Es Balok 25 kg', desc: 'Es balok padat untuk pendingin ikan & cool box.', unit: 'balok', price: 35000, stock: 30 },
   ],
   'es-buah': [
-    ['Es Buah Spesial', 'Semangka, melon, nanas, kelapa muda, nata de coco, susu & sirup.', 15000, 'cup', 50, 1],
-    ['Es Buah Jumbo', 'Porsi jumbo untuk berbagi, isian buah melimpah.', 25000, 'cup', 30, 0],
-    ['Es Buah Family Pack 1 L', 'Kemasan 1 liter untuk keluarga.', 40000, 'botol', 20, 0],
+    { name: 'Es Buah Spesial', desc: 'Semangka, melon, nanas, kelapa muda, nata de coco, susu & sirup.', unit: 'cup', featured: 1, option_label: 'Ukuran', options: [['Cup', 15000, 50], ['Jumbo', 25000, 30], ['Family Pack 1 L', 40000, 20]] },
   ],
   'es-serut': [
-    ['Es Serut Coklat Keju', 'Es serut lembut dengan coklat, keju parut & susu kental manis.', 12000, 'cup', 40, 1],
-    ['Es Serut Strawberry', 'Sirup stroberi segar dengan susu.', 10000, 'cup', 40, 0],
-    ['Es Serut Durian', 'Topping durian asli yang legit.', 18000, 'cup', 25, 1],
+    { name: 'Es Serut', desc: 'Es serut lembut dengan susu dan topping pilihan.', unit: 'cup', featured: 1, option_label: 'Rasa', options: [['Coklat Keju', 12000, 40], ['Strawberry', 10000, 40], ['Durian', 18000, 25]] },
   ],
   'frozen-food': [
-    ['Nugget Ayam 500 g', 'Nugget ayam asli tanpa pengawet berlebih.', 32000, 'pack', 40, 1],
-    ['Sosis Sapi 500 g', 'Sosis sapi siap goreng atau bakar.', 35000, 'pack', 35, 0],
-    ['Dimsum Ayam isi 10', 'Dimsum ayam udang, tinggal kukus 10 menit.', 28000, 'pack', 30, 1],
-    ['Kentang Goreng 1 kg', 'Shoestring fries renyah.', 38000, 'pack', 25, 0],
+    { name: 'Nugget Ayam', desc: 'Nugget ayam asli, tinggal goreng.', unit: 'pack', featured: 1, option_label: 'Berat', options: [['250 g', 17000, 40], ['500 g', 32000, 40], ['1 kg', 60000, 20]] },
+    { name: 'Sosis Sapi 500 g', desc: 'Sosis sapi siap goreng atau bakar.', unit: 'pack', price: 35000, stock: 35 },
+    { name: 'Dimsum Ayam isi 10', desc: 'Dimsum ayam udang, tinggal kukus 10 menit.', unit: 'pack', price: 28000, stock: 30, featured: 1 },
+    { name: 'Kentang Goreng 1 kg', desc: 'Shoestring fries renyah.', unit: 'pack', price: 38000, stock: 25 },
   ],
   'siap-saji': [
-    ['Nasi Ayam Geprek', 'Ayam geprek sambal bawang + nasi + lalapan.', 18000, 'porsi', 30, 1],
-    ['Nasi Goreng Spesial', 'Nasi goreng dengan telur, ayam suwir & kerupuk.', 20000, 'porsi', 30, 0],
-    ['Mie Goreng Jawa', 'Mie goreng bumbu jawa dengan sayur & telur.', 17000, 'porsi', 25, 0],
-    ['Paket Hemat Nugget + Nasi', 'Nasi, nugget, sosis & saus.', 15000, 'porsi', 40, 1],
+    { name: 'Nasi Ayam Geprek', desc: 'Ayam geprek sambal bawang + nasi + lalapan.', unit: 'porsi', featured: 1, option_label: 'Porsi', options: [['Biasa', 18000, 30], ['Jumbo', 23000, 20]] },
+    { name: 'Nasi Goreng Spesial', desc: 'Nasi goreng dengan telur, ayam suwir & kerupuk.', unit: 'porsi', price: 20000, stock: 30 },
+    { name: 'Mie Goreng Jawa', desc: 'Mie goreng bumbu jawa dengan sayur & telur.', unit: 'porsi', price: 17000, stock: 25 },
+    { name: 'Paket Hemat Nugget + Nasi', desc: 'Nasi, nugget, sosis & saus.', unit: 'porsi', price: 15000, stock: 40, featured: 1 },
   ],
 };
 
@@ -57,10 +53,18 @@ function seedCatalog() {
   if (d.prepare('SELECT 1 FROM categories').get()) return false;
   db.transaction(() => {
     const insC = d.prepare('INSERT INTO categories (name, slug, icon, color, description, sort_order) VALUES (?,?,?,?,?,?)');
-    const insP = d.prepare('INSERT INTO products (category_id, name, description, price, unit, stock, is_featured, cost_price) VALUES (?,?,?,?,?,?,?,?)');
+    const insP = d.prepare(
+      'INSERT INTO products (category_id, name, description, unit, price, cost_price, stock, is_featured, option_label) VALUES (?,?,?,?,?,?,?,?,?)'
+    );
+    const insV = d.prepare('INSERT INTO product_variants (product_id, name, price, cost_price, stock, sort_order) VALUES (?,?,?,?,?,?)');
     CATEGORIES.forEach((c, i) => {
       const id = insC.run(c.name, c.slug, c.icon, c.color, c.description, i).lastInsertRowid;
-      for (const p of PRODUCTS[c.slug]) insP.run(id, ...p, Math.round((p[2] * COST_RATIO[c.slug]) / 100) * 100);
+      const cost = (price) => Math.round((price * COST_RATIO[c.slug]) / 100) * 100;
+      for (const p of PRODUCTS[c.slug]) {
+        const price = p.price ?? p.options[0][1];
+        const pid = insP.run(id, p.name, p.desc, p.unit, price, cost(price), p.stock ?? 0, p.featured ? 1 : 0, p.option_label || '').lastInsertRowid;
+        (p.options || []).forEach(([name, vprice, stock], k) => insV.run(pid, name, vprice, cost(vprice), stock, k));
+      }
     });
     const insB = d.prepare('INSERT INTO banners (title, subtitle, color, sort_order) VALUES (?,?,?,?)');
     BANNERS.forEach((b, i) => insB.run(...b, i));

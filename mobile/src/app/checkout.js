@@ -5,7 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Card, Field, Loading, OptionCard, Row, tap } from '../components/ui';
 import { useAuth } from '../context/auth';
-import { useCart } from '../context/cart';
+import { lineKey, useCart } from '../context/cart';
 import { useStore } from '../context/store';
 import { api } from '../lib/api';
 import { notify } from '../lib/dialog';
@@ -60,7 +60,7 @@ export default function Checkout() {
     }, [auth.user])
   );
 
-  const items = cart.items.map((i) => ({ product_id: i.product.id, quantity: i.quantity }));
+  const items = cart.items.map((i) => ({ product_id: i.product.id, variant_id: i.variant?.id, quantity: i.quantity }));
   const itemsKey = JSON.stringify(items);
   const quoteKey = JSON.stringify([itemsKey, delivery, delivery === 'delivery' ? addressId : null]);
 
@@ -200,7 +200,7 @@ export default function Checkout() {
         <Card>
           <Text style={{ fontSize: font.md, fontWeight: '800', marginBottom: 8, color: colors.ink }}>Ringkasan Belanja</Text>
           {cart.items.map((i) => (
-            <Row key={i.product.id} label={`${i.quantity}× ${i.product.name}`} value={rupiah(i.quantity * i.product.price)} />
+            <Row key={lineKey(i.product.id, i.variant?.id)} label={`${i.quantity}× ${i.product.name}${i.variant ? ` (${i.variant.name})` : ''}`} value={rupiah(i.quantity * cart.priceOf(i))} />
           ))}
           <View style={s.divider} />
           <Row label="Subtotal" value={rupiah(quote?.subtotal ?? cart.subtotal)} />

@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import CartBar from '../../components/CartBar';
-import { Empty, ErrorView, Loading, ProductCard, tap } from '../../components/ui';
-import { useCart } from '../../context/cart';
+import ShopProductCard from '../../components/ShopProductCard';
+import { Empty, ErrorView, Loading, tap } from '../../components/ui';
+import { useVersion } from '../../context/realtime';
 import { useStore } from '../../context/store';
 import { api } from '../../lib/api';
 import { colors, font, radius } from '../../lib/theme';
@@ -12,7 +13,6 @@ import { colors, font, radius } from '../../lib/theme';
 export default function Products() {
   const params = useLocalSearchParams();
   const { categories } = useStore();
-  const cart = useCart();
   const [category, setCategory] = useState(params.category || '');
   const [q, setQ] = useState('');
   const [items, setItems] = useState(null);
@@ -31,6 +31,7 @@ export default function Products() {
     if (params.focus) setTimeout(() => inputRef.current?.focus(), 300);
   }, [params.focus]);
 
+  const productsV = useVersion('products');
   const load = useCallback(async () => {
     try {
       const qs = new URLSearchParams();
@@ -42,7 +43,8 @@ export default function Products() {
     } catch (e) {
       setError(e.message);
     }
-  }, [category, q]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- productsV: muat ulang saat admin mengubah katalog
+  }, [category, q, productsV]);
 
   useEffect(() => {
     const t = setTimeout(load, q ? 300 : 0); // debounce pencarian
@@ -76,7 +78,7 @@ export default function Products() {
                 }}
                 style={[s.chip, active && s.chipActive]}
               >
-                <Text style={{ fontSize: 18 }}>{c.icon}</Text>
+                {c.image_url ? <Image source={{ uri: c.image_url }} style={s.chipImg} /> : <Text style={{ fontSize: 18 }}>{c.icon}</Text>}
                 <Text style={[s.chipText, active && { color: colors.white }]}>{c.name}</Text>
               </Pressable>
             );
@@ -105,7 +107,7 @@ export default function Products() {
           ListEmptyComponent={<Empty icon="search" title="Produk tidak ditemukan" subtitle="Coba kata kunci atau kategori lain." />}
           renderItem={({ item: p }) => (
             <View style={{ flex: 1, maxWidth: '50%' }}>
-              <ProductCard product={p} qty={cart.qtyOf(p.id)} onPress={() => router.push(`/product/${p.id}`)} onAdd={() => cart.add(p)} onQty={(n) => cart.setQty(p, n)} />
+              <ShopProductCard product={p} />
             </View>
           )}
         />
@@ -120,6 +122,7 @@ const s = StyleSheet.create({
   search: { flex: 1, fontSize: font.md, color: colors.ink, height: '100%' },
   chips: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, height: 44, borderRadius: radius.pill, backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.line },
+  chipImg: { width: 26, height: 26, borderRadius: 13 },
   chipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
   chipText: { fontSize: font.sm, fontWeight: '700', color: colors.ink },
   desc: { marginHorizontal: 16, fontSize: font.sm, color: colors.muted },

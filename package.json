@@ -1,0 +1,12 @@
+{
+  "name": "harum-market",
+  "private": true,
+  "description": "Harum Market (Harum Group) — aplikasi pelanggan + backend & panel admin",
+  "scripts": {
+    "setup": "npm --prefix backend install && npm --prefix mobile install",
+    "build:web": "npm --prefix mobile run build:web",
+    "demo": "npm run setup && npm run build:web && npm --prefix backend run demo:data && npm --prefix backend start",
+    "start": "npm --prefix backend start",
+    "test": "npm --prefix backend test && npm --prefix mobile run lint"
+  }
+}

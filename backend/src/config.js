@@ -5,7 +5,8 @@ const env = process.env;
 
 module.exports = {
   port: Number(env.PORT || 4000),
-  publicUrl: (env.PUBLIC_URL || `http://localhost:${env.PORT || 4000}`).replace(/\/$/, ''),
+  // RENDER_EXTERNAL_URL otomatis tersedia saat di-deploy ke Render
+  publicUrl: (env.PUBLIC_URL || env.RENDER_EXTERNAL_URL || `http://localhost:${env.PORT || 4000}`).replace(/\/$/, ''),
   jwtSecret: env.JWT_SECRET || 'dev-secret-harum-group',
   adminEmail: env.ADMIN_EMAIL || 'admin@harumgroup.id',
   adminPassword: env.ADMIN_PASSWORD || 'admin123',

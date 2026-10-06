@@ -3,9 +3,11 @@ const db = require('./db');
 const { createApp } = require('./app');
 const { ensureAdmin } = require('./bootstrap');
 const orders = require('./services/orders');
+const realtime = require('./realtime');
 
-if (process.env.NODE_ENV === 'production' && config.jwtSecret === 'dev-secret-harum-group') {
-  console.error('JWT_SECRET wajib diisi di produksi (.env)');
+const WEAK_SECRETS = ['dev-secret-harum-group', 'ganti-dengan-rahasia-yang-panjang'];
+if (process.env.NODE_ENV === 'production' && (WEAK_SECRETS.includes(config.jwtSecret) || config.jwtSecret.length < 16)) {
+  console.error('JWT_SECRET wajib diisi string acak yang panjang (min. 16 karakter) di produksi (.env)');
   process.exit(1);
 }
 if (process.env.NODE_ENV === 'production' && config.payment.provider === 'simulator') {
@@ -17,13 +19,16 @@ ensureAdmin();
 if (!db.get().prepare('SELECT 1 FROM categories').get()) {
   require('./seed').seedCatalog();
 }
+// Prototype: isi data contoh penjualan & biaya bila DEMO_DATA=1
+if (process.env.DEMO_DATA === '1') require('./demo').seedDemo();
 
 const app = createApp();
-app.listen(config.port, '0.0.0.0', () => {
+const server = app.listen(config.port, '0.0.0.0', () => {
   console.log(`Harum Market API : ${config.publicUrl}/api`);
   console.log(`Panel Admin      : ${config.publicUrl}/admin`);
   console.log(`Payment provider : ${config.payment.provider}`);
 });
+realtime.attach(server);
 
 // Batalkan otomatis pesanan yang lewat batas waktu bayar (mode simulator).
 setInterval(() => {

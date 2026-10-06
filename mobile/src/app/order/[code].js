@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Linking, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, ErrorView, Loading, ProductImage, Row, StatusBadge } from '../../components/ui';
 import { useCart } from '../../context/cart';
+import { useVersion } from '../../context/realtime';
 import { useStore } from '../../context/store';
 import { api } from '../../lib/api';
 import { dateTime, km, payLabel, rupiah } from '../../lib/format';
@@ -32,12 +33,14 @@ export default function OrderDetail() {
     }
   }, [code]);
 
+  // Status diperbarui seketika lewat koneksi realtime (+ cek berkala sebagai cadangan)
+  const ordersV = useVersion('orders');
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- loader async, setState terjadi setelah fetch
     load();
-    const t = setInterval(load, 15000); // status diperbarui otomatis
+    const t = setInterval(load, 60000);
     return () => clearInterval(t);
-  }, [load]);
+  }, [load, ordersV]);
 
   if (error && !o) return <ErrorView message={error} onRetry={load} />;
   if (!o) return <Loading />;
@@ -47,10 +50,15 @@ export default function OrderDetail() {
   const whenOf = (st) => o.history.find((h) => h.status === st)?.created_at;
 
   const buyAgain = async () => {
-    const r = await api('/products');
+    const ids = [...new Set(o.items.map((i) => i.product_id).filter(Boolean))].join(',');
+    const r = ids ? await api(`/products?ids=${ids}`) : { data: [] };
     for (const it of o.items) {
       const p = r.data.find((x) => x.id === it.product_id);
-      if (p && p.stock > 0) cart.setQty(p, Math.min(it.quantity, p.stock));
+      if (!p) continue;
+      const v = p.has_variants ? p.variants.find((x) => x.id === it.variant_id) : null;
+      if (p.has_variants && !v) continue;
+      const stock = (v || p).stock;
+      if (stock > 0) cart.setQty(p, v, Math.min(it.quantity, stock));
     }
     router.push('/cart');
   };

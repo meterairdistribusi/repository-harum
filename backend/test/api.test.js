@@ -14,6 +14,7 @@ let server;
 let base;
 before(async () => {
   server = createApp().listen(0);
+  require('../src/realtime').attach(server);
   await new Promise((r) => server.once('listening', r));
   base = `http://127.0.0.1:${server.address().port}`;
 });
@@ -36,6 +37,14 @@ async function call(method, path, { token, body, form } = {}) {
 }
 
 const stockOf = (id) => db.get().prepare('SELECT stock FROM products WHERE id = ?').get(id).stock;
+const P = (name) => db.get().prepare('SELECT id FROM products WHERE name = ?').get(name).id;
+const V = (product, variant) =>
+  db.get().prepare('SELECT v.id FROM product_variants v JOIN products p ON p.id = v.product_id WHERE p.name = ? AND v.name = ?').get(product, variant).id;
+const vstock = (id) => db.get().prepare('SELECT stock FROM product_variants WHERE id = ?').get(id).stock;
+/** Item keranjang: sub menu + pilihan (opsional). */
+const item = (product, variant, quantity) => ({ product_id: P(product), variant_id: variant ? V(product, variant) : undefined, quantity });
+const KRISTAL1 = (q) => item('Es Kristal Tabung', '1 kg', q);
+const KRISTAL5 = (q) => item('Es Kristal Tabung', '5 kg', q);
 
 let customer;
 let admin;
@@ -67,12 +76,12 @@ test('pelanggan tidak bisa akses API admin', async () => {
 });
 
 test('quote menghitung ongkir & gratis ongkir', async () => {
-  const small = await call('POST', '/api/me/checkout/quote', { token: customer, body: { items: [{ product_id: 1, quantity: 5 }], delivery_method: 'delivery' } });
+  const small = await call('POST', '/api/me/checkout/quote', { token: customer, body: { items: [KRISTAL1(5)], delivery_method: 'delivery' } });
   assert.equal(small.body.data.subtotal, 15000);
   assert.equal(small.body.data.delivery_fee, 10000);
-  const pickup = await call('POST', '/api/me/checkout/quote', { token: customer, body: { items: [{ product_id: 1, quantity: 5 }], delivery_method: 'pickup' } });
+  const pickup = await call('POST', '/api/me/checkout/quote', { token: customer, body: { items: [KRISTAL1(5)], delivery_method: 'pickup' } });
   assert.equal(pickup.body.data.delivery_fee, 0);
-  const big = await call('POST', '/api/me/checkout/quote', { token: customer, body: { items: [{ product_id: 2, quantity: 13 }] } });
+  const big = await call('POST', '/api/me/checkout/quote', { token: customer, body: { items: [KRISTAL5(13)] } });
   assert.equal(big.body.data.delivery_fee, 0);
 });
 
@@ -81,10 +90,11 @@ test('alur pesanan QRIS: buat -> bayar (simulasi) -> diproses -> diantar -> sele
   assert.equal(addr.status, 201);
   assert.equal(addr.body.data.is_default, 1);
 
-  const before = stockOf(5);
+  const cup = V('Es Buah Spesial', 'Cup');
+  const before = vstock(cup);
   const r = await call('POST', '/api/me/orders', {
     token: customer,
-    body: { items: [{ product_id: 5, quantity: 2 }], delivery_method: 'delivery', address_id: addr.body.data.id, payment_method: 'qris' },
+    body: { items: [item('Es Buah Spesial', 'Cup', 2)], delivery_method: 'delivery', address_id: addr.body.data.id, payment_method: 'qris' },
   });
   assert.equal(r.status, 201, JSON.stringify(r.body));
   const order = r.body.data;
@@ -92,7 +102,9 @@ test('alur pesanan QRIS: buat -> bayar (simulasi) -> diproses -> diantar -> sele
   assert.equal(order.total, 2 * 15000 + 10000);
   assert.equal(order.address, 'Jl. Melati 5');
   assert.match(order.payment_url, /\/pay\/HRM-/);
-  assert.equal(stockOf(5), before - 2);
+  assert.equal(vstock(cup), before - 2);
+  assert.equal(order.items[0].name, 'Es Buah Spesial (Cup)');
+  assert.equal(order.items[0].variant_name, 'Cup');
 
   const page = await call('GET', `/pay/${order.code}`);
   assert.equal(page.status, 200);
@@ -125,7 +137,7 @@ test('alur pesanan QRIS: buat -> bayar (simulasi) -> diproses -> diantar -> sele
   const st = stats.body.data;
   assert.equal(st.today.orders, 1);
   assert.equal(st.today.revenue, 30000); // omzet = penjualan produk, tanpa ongkir
-  const cost = db.get().prepare('SELECT cost_price FROM products WHERE id = 5').get().cost_price;
+  const cost = db.get().prepare('SELECT cost_price FROM product_variants WHERE id = ?').get(cup).cost_price;
   assert.ok(cost > 0);
   assert.equal(st.today.cost, 2 * cost);
   assert.equal(st.today.profit, 30000 - 2 * cost);
@@ -136,30 +148,31 @@ test('alur pesanan QRIS: buat -> bayar (simulasi) -> diproses -> diantar -> sele
 });
 
 test('batal pesanan mengembalikan stok', async () => {
-  const before = stockOf(12);
+  const sosis = P('Sosis Sapi 500 g');
+  const before = stockOf(sosis);
   const r = await call('POST', '/api/me/orders', {
     token: customer,
-    body: { items: [{ product_id: 12, quantity: 1 }], delivery_method: 'pickup', payment_method: 'bank_transfer', payment_channel: 'bca' },
+    body: { items: [item('Sosis Sapi 500 g', null, 1)], delivery_method: 'pickup', payment_method: 'bank_transfer', payment_channel: 'bca' },
   });
   assert.equal(r.status, 201, JSON.stringify(r.body));
   assert.equal(r.body.data.delivery_fee, 0);
-  assert.equal(stockOf(12), before - 1);
+  assert.equal(stockOf(sosis), before - 1);
   const c = await call('POST', `/api/me/orders/${r.body.data.code}/cancel`, { token: customer });
   assert.equal(c.body.data.status, 'cancelled');
-  assert.equal(stockOf(12), before);
+  assert.equal(stockOf(sosis), before);
 });
 
 test('validasi pesanan: stok, metode bayar, alamat', async () => {
-  const stock = await call('POST', '/api/me/orders', { token: customer, body: { items: [{ product_id: 1, quantity: 99999 }], delivery_method: 'pickup', payment_method: 'qris' } });
+  const stock = await call('POST', '/api/me/orders', { token: customer, body: { items: [KRISTAL1(99999)], delivery_method: 'pickup', payment_method: 'qris' } });
   assert.equal(stock.status, 400);
   assert.match(stock.body.error, /Stok/);
-  const method = await call('POST', '/api/me/orders', { token: customer, body: { items: [{ product_id: 1, quantity: 5 }], delivery_method: 'pickup', payment_method: 'kredit' } });
+  const method = await call('POST', '/api/me/orders', { token: customer, body: { items: [KRISTAL1(5)], delivery_method: 'pickup', payment_method: 'kredit' } });
   assert.equal(method.status, 400);
-  const ch = await call('POST', '/api/me/orders', { token: customer, body: { items: [{ product_id: 1, quantity: 5 }], delivery_method: 'pickup', payment_method: 'ewallet', payment_channel: 'bca' } });
+  const ch = await call('POST', '/api/me/orders', { token: customer, body: { items: [KRISTAL1(5)], delivery_method: 'pickup', payment_method: 'ewallet', payment_channel: 'bca' } });
   assert.equal(ch.status, 400);
-  const addr = await call('POST', '/api/me/orders', { token: customer, body: { items: [{ product_id: 1, quantity: 5 }], delivery_method: 'delivery', payment_method: 'qris' } });
+  const addr = await call('POST', '/api/me/orders', { token: customer, body: { items: [KRISTAL1(5)], delivery_method: 'delivery', payment_method: 'qris' } });
   assert.equal(addr.status, 400);
-  const minimum = await call('POST', '/api/me/orders', { token: customer, body: { items: [{ product_id: 1, quantity: 1 }], delivery_method: 'pickup', payment_method: 'qris' } });
+  const minimum = await call('POST', '/api/me/orders', { token: customer, body: { items: [KRISTAL1(1)], delivery_method: 'pickup', payment_method: 'qris' } });
   assert.equal(minimum.status, 400);
   assert.match(minimum.body.error, /Minimal/);
 });
@@ -167,7 +180,7 @@ test('validasi pesanan: stok, metode bayar, alamat', async () => {
 test('webhook Midtrans memverifikasi signature dan menandai lunas', async () => {
   const r = await call('POST', '/api/me/orders', {
     token: customer,
-    body: { items: [{ product_id: 9, quantity: 2 }], delivery_method: 'pickup', payment_method: 'ewallet', payment_channel: 'gopay' },
+    body: { items: [item('Es Serut', 'Strawberry', 2)], delivery_method: 'pickup', payment_method: 'ewallet', payment_channel: 'gopay' },
   });
   const order = r.body.data;
   config.payment.midtrans.serverKey = 'SB-Mid-server-test';
@@ -195,7 +208,7 @@ test('admin kelola produk & pengaturan', async () => {
   const s = await call('PUT', '/api/admin/settings', { token: admin, body: { delivery_fee: 8000, is_open: false } });
   assert.equal(s.body.data.delivery_fee, 8000);
   assert.equal(s.body.data.is_open, false);
-  const closed = await call('POST', '/api/me/orders', { token: customer, body: { items: [{ product_id: 1, quantity: 5 }], delivery_method: 'pickup', payment_method: 'qris' } });
+  const closed = await call('POST', '/api/me/orders', { token: customer, body: { items: [KRISTAL1(5)], delivery_method: 'pickup', payment_method: 'qris' } });
   assert.match(closed.body.error, /tutup/);
   await call('PUT', '/api/admin/settings', { token: admin, body: { is_open: true } });
 
@@ -208,7 +221,12 @@ test('harga modal tidak bocor ke pelanggan', async () => {
   const list = await call('GET', '/api/products');
   assert.ok(list.body.data.length > 0);
   assert.ok(list.body.data.every((p) => !('cost_price' in p)));
-  assert.ok(!('cost_price' in (await call('GET', '/api/products/1')).body.data));
+  const one = (await call('GET', `/api/products/${P('Es Kristal Tabung')}`)).body.data;
+  assert.ok(!('cost_price' in one));
+  assert.equal(one.variants.length, 3);
+  assert.ok(one.variants.every((v) => !('cost_price' in v)));
+  assert.equal(one.price, 3000); // harga mulai
+  assert.equal(one.price_max, 22000);
   const orders = await call('GET', '/api/me/orders', { token: customer });
   const det = await call('GET', `/api/me/orders/${orders.body.data[0].code}`, { token: customer });
   assert.ok(det.body.data.items.every((i) => !('cost_price' in i)));
@@ -217,7 +235,7 @@ test('harga modal tidak bocor ke pelanggan', async () => {
 test('pembayaran tunai: langsung diproses, lunas saat selesai', async () => {
   const r = await call('POST', '/api/me/orders', {
     token: customer,
-    body: { items: [{ product_id: 1, quantity: 5 }], delivery_method: 'pickup', payment_method: 'cash' },
+    body: { items: [KRISTAL1(5)], delivery_method: 'pickup', payment_method: 'cash' },
   });
   assert.equal(r.status, 201, JSON.stringify(r.body));
   const o = r.body.data;
@@ -234,7 +252,7 @@ test('pembayaran tunai: langsung diproses, lunas saat selesai', async () => {
   assert.ok(done.body.data.paid_at);
 
   await call('PUT', '/api/admin/settings', { token: admin, body: { cash_enabled: false } });
-  const off = await call('POST', '/api/me/orders', { token: customer, body: { items: [{ product_id: 1, quantity: 5 }], delivery_method: 'pickup', payment_method: 'cash' } });
+  const off = await call('POST', '/api/me/orders', { token: customer, body: { items: [KRISTAL1(5)], delivery_method: 'pickup', payment_method: 'cash' } });
   assert.equal(off.status, 400);
   assert.ok(!(await call('GET', '/api/store')).body.data.payment_methods.some((m) => m.code === 'cash'));
   await call('PUT', '/api/admin/settings', { token: admin, body: { cash_enabled: true } });
@@ -261,17 +279,17 @@ test('ongkir berdasarkan jarak tempuh di peta', async () => {
   assert.equal(store.store_location_set, true);
 
   const noPin = await call('POST', '/api/me/addresses', { token: customer, body: { recipient: 'A', phone: '081234567890', address: 'Tanpa titik' } });
-  const quoteNoPin = await call('POST', '/api/me/checkout/quote', { token: customer, body: { items: [{ product_id: 2, quantity: 2 }], delivery_method: 'delivery', address_id: noPin.body.data.id } });
+  const quoteNoPin = await call('POST', '/api/me/checkout/quote', { token: customer, body: { items: [KRISTAL5(2)], delivery_method: 'delivery', address_id: noPin.body.data.id } });
   assert.match(quoteNoPin.body.data.shipping_error, /peta/);
 
   const pin = await call('POST', '/api/me/addresses', { token: customer, body: { recipient: 'B', phone: '081234567890', address: 'Ada titik', lat: -6.24, lng: 106.83 } });
   assert.equal(pin.body.data.lat, -6.24);
-  const q = await call('POST', '/api/me/checkout/quote', { token: customer, body: { items: [{ product_id: 2, quantity: 2 }], delivery_method: 'delivery', address_id: pin.body.data.id } });
+  const q = await call('POST', '/api/me/checkout/quote', { token: customer, body: { items: [KRISTAL5(2)], delivery_method: 'delivery', address_id: pin.body.data.id } });
   assert.equal(q.body.data.distance_km, 5.3);
   assert.equal(q.body.data.delivery_fee, 8000 + 4 * 2500); // 2 km pertama 8000, sisa 3,3 km dibulatkan 4 km
   assert.equal(q.body.data.problems.length, 0);
 
-  const o = await call('POST', '/api/me/orders', { token: customer, body: { items: [{ product_id: 2, quantity: 2 }], delivery_method: 'delivery', address_id: pin.body.data.id, payment_method: 'cash' } });
+  const o = await call('POST', '/api/me/orders', { token: customer, body: { items: [KRISTAL5(2)], delivery_method: 'delivery', address_id: pin.body.data.id, payment_method: 'cash' } });
   assert.equal(o.status, 201, JSON.stringify(o.body));
   assert.equal(o.body.data.delivery_fee, 18000);
   assert.equal(o.body.data.distance_km, 5.3);
@@ -282,7 +300,7 @@ test('ongkir berdasarkan jarak tempuh di peta', async () => {
 
   // Di luar jangkauan
   await call('PUT', '/api/admin/settings', { token: admin, body: { shipping_max_km: 5 } });
-  const far = await call('POST', '/api/me/orders', { token: customer, body: { items: [{ product_id: 2, quantity: 2 }], delivery_method: 'delivery', address_id: pin.body.data.id, payment_method: 'cash' } });
+  const far = await call('POST', '/api/me/orders', { token: customer, body: { items: [KRISTAL5(2)], delivery_method: 'delivery', address_id: pin.body.data.id, payment_method: 'cash' } });
   assert.equal(far.status, 400);
   assert.match(far.body.error, /jangkauan/);
 
@@ -291,7 +309,7 @@ test('ongkir berdasarkan jarak tempuh di peta', async () => {
   config.maps.osrmUrl = 'http://127.0.0.1:1';
   await call('PUT', '/api/admin/settings', { token: admin, body: { shipping_max_km: 50 } });
   const pin2 = await call('POST', '/api/me/addresses', { token: customer, body: { recipient: 'C', phone: '081234567890', address: 'Lain', lat: -6.25, lng: 106.85 } });
-  const est = await call('POST', '/api/me/checkout/quote', { token: customer, body: { items: [{ product_id: 2, quantity: 2 }], delivery_method: 'delivery', address_id: pin2.body.data.id } });
+  const est = await call('POST', '/api/me/checkout/quote', { token: customer, body: { items: [KRISTAL5(2)], delivery_method: 'delivery', address_id: pin2.body.data.id } });
   assert.equal(est.body.data.distance_estimated, true);
   assert.ok(est.body.data.distance_km > 7 && est.body.data.distance_km < 12);
 
@@ -328,4 +346,152 @@ test('migrasi database versi lama (tanpa metode cash)', () => {
     migrated.close();
     db._set(current);
   }
+});
+
+// ---------------------------------------------------------------- v1.2
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+function form(fields, files = []) {
+  const fd = new FormData();
+  for (const [k, v] of Object.entries(fields)) fd.append(k, typeof v === 'string' ? v : JSON.stringify(v));
+  files.forEach(([field, name]) => fd.append(field, new Blob([PNG], { type: 'image/png' }), name));
+  return fd;
+}
+async function upload(method, path, fd) {
+  const res = await fetch(base + path, { method, headers: { Authorization: `Bearer ${admin}` }, body: fd });
+  return { status: res.status, body: await res.json() };
+}
+
+test('sub menu dengan pilihan: wajib pilih, stok per pilihan', async () => {
+  const noVariant = await call('POST', '/api/me/orders', { token: customer, body: { items: [{ product_id: P('Es Kristal Tabung'), quantity: 5 }], delivery_method: 'pickup', payment_method: 'cash' } });
+  assert.equal(noVariant.status, 400);
+  assert.match(noVariant.body.error, /Pilihan/);
+  const q = await call('POST', '/api/me/checkout/quote', { token: customer, body: { items: [{ product_id: P('Es Kristal Tabung'), quantity: 5 }] } });
+  assert.match(q.body.data.problems[0].message, /Pilihan/);
+
+  const v10 = V('Es Kristal Tabung', '10 kg');
+  const before = vstock(v10);
+  const o = await call('POST', '/api/me/orders', { token: customer, body: { items: [item('Es Kristal Tabung', '10 kg', 2), item('Es Kristal Tabung', '1 kg', 5)], delivery_method: 'pickup', payment_method: 'cash' } });
+  assert.equal(o.status, 201, JSON.stringify(o.body));
+  assert.equal(o.body.data.subtotal, 2 * 22000 + 5 * 3000);
+  assert.equal(vstock(v10), before - 2);
+  await call('POST', `/api/admin/orders/${o.body.data.id}/status`, { token: admin, body: { status: 'cancelled', note: 'tes' } });
+  assert.equal(vstock(v10), before);
+});
+
+test('admin: foto sub menu maks 4, pilihan, gambar kategori', async () => {
+  const created = await upload('POST', '/api/admin/products', form({ name: 'Es Teler', category_id: '2', unit: 'cup', option_label: 'Ukuran', variants: [{ name: 'Kecil', price: 10000, cost_price: 6000, stock: 10 }, { name: 'Besar', price: 15000, cost_price: 9000, stock: 5 }] }, [['images', 'a.png'], ['images', 'b.png']]));
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+  const p = created.body.data;
+  assert.equal(p.images.length, 2);
+  assert.match(p.images[0], /^http:\/\/.*\/uploads\/.*\.png$/);
+  assert.equal(p.variants.length, 2);
+  assert.equal(p.variants[0].cost_price, 6000); // admin melihat harga modal
+
+  const file = await fetch(p.images[1]);
+  assert.equal(file.status, 200);
+
+  // Pertahankan foto ke-2 saja + tambah 3 foto baru = 4 (batas)
+  const keep = [p.image_paths[1]];
+  const upd = await upload('PUT', `/api/admin/products/${p.id}`, form({ name: 'Es Teler', category_id: '2', option_label: 'Ukuran', keep_images: keep, variants: [{ id: p.variants[1].id, name: 'Besar', price: 16000, cost_price: 9000, stock: 7 }] }, [['images', 'c.png'], ['images', 'd.png'], ['images', 'e.png']]));
+  assert.equal(upd.status, 200, JSON.stringify(upd.body));
+  assert.equal(upd.body.data.images.length, 4);
+  assert.equal(upd.body.data.image_paths[0], p.image_paths[1]);
+  assert.equal(upd.body.data.variants.length, 1);
+  assert.equal(upd.body.data.variants[0].price, 16000);
+  assert.equal((await fetch(p.images[0])).status, 404); // foto lama yang dibuang ikut terhapus
+
+  // Urutan bebas: foto baru di depan foto lama
+  const reorder = await upload('PUT', `/api/admin/products/${p.id}`, form({ name: 'Es Teler', category_id: '2', image_order: ['new:0', 'old:' + upd.body.data.image_paths[0]] }, [['images', 'g.png']]));
+  assert.equal(reorder.body.data.images.length, 2);
+  assert.equal(reorder.body.data.image_paths[1], upd.body.data.image_paths[0]);
+  assert.notEqual(reorder.body.data.image_paths[0], upd.body.data.image_paths[0]);
+  const four = await upload('PUT', `/api/admin/products/${p.id}`, form({ name: 'Es Teler', category_id: '2' }, [['images', 'h.png'], ['images', 'i.png']]));
+  assert.equal(four.body.data.images.length, 4);
+
+  const tooMany = await upload('PUT', `/api/admin/products/${p.id}`, form({ name: 'Es Teler', category_id: '2' }, [['images', 'f.png']]));
+  assert.equal(tooMany.status, 400);
+  assert.match(tooMany.body.error, /Maksimal 4/);
+
+  const cat = await upload('PUT', '/api/admin/categories/1', form({ name: 'Es Kristal', icon: '🧊', color: '#E0F2FE' }, [['image', 'kategori.png']]));
+  assert.equal(cat.status, 200, JSON.stringify(cat.body));
+  const pub = (await call('GET', '/api/categories')).body.data.find((c) => c.id === 1);
+  assert.match(pub.image_url, /^http:\/\/.*\/uploads\//);
+  const prod = (await call('GET', `/api/products?category=es-kristal`)).body.data[0];
+  assert.equal(prod.category_image, pub.image_url);
+});
+
+test('biaya operasional memotong laba bersih', async () => {
+  const before = (await call('GET', '/api/admin/stats', { token: admin })).body.data.month;
+  const today = new Date().toLocaleDateString('sv-SE');
+  const e = await call('POST', '/api/admin/expenses', { token: admin, body: { date: today, category: 'Listrik & air', description: 'Token listrik', amount: 50000 } });
+  assert.equal(e.status, 201);
+  const after = (await call('GET', '/api/admin/stats', { token: admin })).body.data;
+  assert.equal(after.month.expenses, before.expenses + 50000);
+  assert.equal(after.month.profit, before.profit - 50000);
+  assert.equal(after.month.gross_profit, before.gross_profit);
+  assert.equal(after.month.profit, after.month.revenue - after.month.cost - after.month.expenses);
+  assert.ok(Math.abs(after.month.margin_on_cost - after.month.profit / (after.month.cost + after.month.expenses)) < 1e-9);
+  const m = after.monthly[new Date().getMonth()];
+  assert.equal(m.expenses, after.month.expenses);
+  assert.equal(m.profit, m.revenue - m.cost - m.expenses);
+
+  const list = await call('GET', `/api/admin/expenses?month=${today.slice(0, 7)}`, { token: admin });
+  assert.equal(list.body.total, after.month.expenses);
+  assert.ok(list.body.categories.includes('Gaji karyawan'));
+
+  // Salin biaya rutin bulan lalu
+  const [y, mo] = today.split('-').map(Number);
+  const prevMonth = new Date(Date.UTC(y, mo - 2, 1)).toISOString().slice(0, 7);
+  await call('POST', '/api/admin/expenses', { token: admin, body: { date: `${prevMonth}-28`, category: 'Sewa tempat', amount: 1000000 } });
+  const copy = await call('POST', '/api/admin/expenses/copy-previous', { token: admin, body: { month: today.slice(0, 7) } });
+  assert.equal(copy.body.copied, 1);
+  const bad = await call('POST', '/api/admin/expenses', { token: admin, body: { date: 'kemarin', category: 'x', amount: 1 } });
+  assert.equal(bad.status, 400);
+});
+
+test('realtime: perubahan admin & status pesanan langsung terkirim', async () => {
+  const WebSocket = require('ws');
+  const connect = (token) =>
+    new Promise((resolve) => {
+      const ws = new WebSocket(`${base.replace('http', 'ws')}/ws${token ? '?token=' + token : ''}`);
+      ws.inbox = [];
+      ws.on('message', (m) => ws.inbox.push(JSON.parse(m)));
+      ws.on('open', () => resolve(ws));
+    });
+  const waitFor = async (ws, pred) => {
+    for (let i = 0; i < 50; i++) {
+      const hit = ws.inbox.find(pred);
+      if (hit) return hit;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    return null;
+  };
+  const other = await call('POST', '/api/auth/register', { body: { name: 'Lain', phone: '081300001111', password: 'rahasia1' } });
+  const guest = await connect();
+  const buyer = await connect(customer);
+  const stranger = await connect(other.body.token);
+
+  await call('PATCH', `/api/admin/products/${P('Es Balok 25 kg')}/stock`, { token: admin, body: { stock: 99 } });
+  assert.ok(await waitFor(guest, (m) => m.type === 'catalog' && m.scope === 'products'));
+  await call('PUT', '/api/admin/settings', { token: admin, body: { opening_hours: '06.00 - 22.00' } });
+  assert.ok(await waitFor(guest, (m) => m.type === 'catalog' && m.scope === 'store'));
+
+  const o = await call('POST', '/api/me/orders', { token: customer, body: { items: [item('Es Balok 25 kg', null, 1)], delivery_method: 'pickup', payment_method: 'cash' } });
+  await call('POST', `/api/admin/orders/${o.body.data.id}/status`, { token: admin, body: { status: 'ready_pickup' } });
+  const msg = await waitFor(buyer, (m) => m.type === 'order' && m.status === 'ready_pickup');
+  assert.equal(msg.code, o.body.data.code);
+  assert.equal(stranger.inbox.find((m) => m.type === 'order'), undefined); // pesanan orang lain tidak bocor
+  assert.equal(guest.inbox.find((m) => m.type === 'order'), undefined);
+  [guest, buyer, stranger].forEach((ws) => ws.close());
+});
+
+test('data contoh prototype: sekali saja, laba bersih positif', async () => {
+  const { seedDemo } = require('../src/demo');
+  assert.equal(seedDemo(), true);
+  assert.equal(seedDemo(), false); // tidak dobel
+  const s = (await call('GET', '/api/admin/stats', { token: admin })).body.data;
+  assert.ok(s.year.revenue > 0 && s.year.expenses > 0);
+  assert.ok(s.year.profit > 0, 'toko contoh seharusnya untung');
+  const demo = await call('POST', '/api/auth/login', { body: { login: '081200000000', password: 'demo123' } });
+  assert.equal(demo.status, 200);
 });

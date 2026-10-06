@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS categories (
   slug TEXT NOT NULL UNIQUE,
   icon TEXT NOT NULL DEFAULT '🧊',
   color TEXT NOT NULL DEFAULT '#E0F2FE',
+  image_url TEXT NOT NULL DEFAULT '',
   description TEXT NOT NULL DEFAULT '',
   sort_order INTEGER NOT NULL DEFAULT 0
 );
@@ -33,9 +34,33 @@ CREATE TABLE IF NOT EXISTS products (
   cost_price INTEGER NOT NULL DEFAULT 0,
   unit TEXT NOT NULL DEFAULT 'pcs',
   image_url TEXT NOT NULL DEFAULT '',
+  images TEXT NOT NULL DEFAULT '[]',
+  option_label TEXT NOT NULL DEFAULT '',
   stock INTEGER NOT NULL DEFAULT 0,
   is_active INTEGER NOT NULL DEFAULT 1,
   is_featured INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Pilihan dalam satu sub menu (mis. ukuran 1 kg / 5 kg, porsi biasa / jumbo)
+CREATE TABLE IF NOT EXISTS product_variants (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  price INTEGER NOT NULL CHECK (price >= 0),
+  cost_price INTEGER NOT NULL DEFAULT 0,
+  stock INTEGER NOT NULL DEFAULT 0,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+-- Biaya operasional (gaji, listrik, sewa, bensin, kemasan, dll.)
+CREATE TABLE IF NOT EXISTS expenses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  date TEXT NOT NULL,
+  category TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  amount INTEGER NOT NULL CHECK (amount >= 0),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -83,6 +108,8 @@ CREATE TABLE IF NOT EXISTS order_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
   product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
+  variant_id INTEGER,
+  variant_name TEXT NOT NULL DEFAULT '',
   name TEXT NOT NULL,
   unit TEXT NOT NULL DEFAULT 'pcs',
   image_url TEXT NOT NULL DEFAULT '',
@@ -119,6 +146,8 @@ CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_variants_product ON product_variants(product_id);
+CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
 `;
 
 let db;
@@ -145,6 +174,13 @@ function migrate(d) {
   addColumn('order_items', 'cost_price', 'INTEGER NOT NULL DEFAULT 0');
   addColumn('addresses', 'lat', 'REAL');
   addColumn('addresses', 'lng', 'REAL');
+  // v1.2: gambar kategori, foto sub menu (maks 4), pilihan/varian
+  addColumn('categories', 'image_url', "TEXT NOT NULL DEFAULT ''");
+  addColumn('products', 'images', "TEXT NOT NULL DEFAULT '[]'");
+  addColumn('products', 'option_label', "TEXT NOT NULL DEFAULT ''");
+  addColumn('order_items', 'variant_id', 'INTEGER');
+  addColumn('order_items', 'variant_name', "TEXT NOT NULL DEFAULT ''");
+  d.exec(`UPDATE products SET images = json_array(image_url) WHERE image_url <> '' AND images = '[]'`);
 
   // v1.1: metode bayar 'cash' + kolom distance_km. CHECK constraint SQLite hanya bisa
   // diubah dengan membuat ulang tabel (prosedur resmi: buat baru, salin, hapus, ganti nama).

@@ -68,19 +68,16 @@ router.delete('/addresses/:id', (req, res) => {
 router.post('/checkout/quote', asyncHandler(async (req, res) => {
   const s = settings.all();
   const items = Array.isArray(req.body.items) ? req.body.items : [];
-  const getP = db.get().prepare('SELECT id, name, price, stock, is_active, unit FROM products WHERE id = ?');
-  const lines = [];
-  const problems = [];
-  for (const it of items) {
-    const p = db.plain(getP.get(toInt(it.product_id)));
-    const qty = toInt(it.quantity);
-    if (!p || !p.is_active) {
-      problems.push({ product_id: it.product_id, message: 'Produk sudah tidak tersedia' });
-      continue;
-    }
-    if (p.stock < qty) problems.push({ product_id: p.id, message: `Stok ${p.name} tinggal ${p.stock} ${p.unit}` });
-    lines.push({ product_id: p.id, name: p.name, price: p.price, quantity: qty, subtotal: p.price * qty });
-  }
+  const resolved = orders.resolveLines(items, { strict: false });
+  const problems = resolved.problems;
+  const lines = resolved.lines.map((l) => ({
+    product_id: l.product.id,
+    variant_id: l.variant?.id ?? null,
+    name: l.name,
+    price: l.price,
+    quantity: l.quantity,
+    subtotal: l.subtotal,
+  }));
   const subtotal = lines.reduce((a, l) => a + l.subtotal, 0);
   const method = req.body.delivery_method === 'pickup' ? 'pickup' : 'delivery';
   const address = req.body.address_id
