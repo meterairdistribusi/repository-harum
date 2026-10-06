@@ -1,0 +1,133 @@
+const express = require('express');
+const db = require('../db');
+const orders = require('../services/orders');
+const settings = require('../services/settings');
+const { authenticate } = require('../middleware/auth');
+const { HttpError, asyncHandler, required, toInt, toBool, normalizePhone } = require('../utils');
+const { absUrl } = require('../media');
+
+const router = express.Router();
+router.use(authenticate);
+
+const orderOut = (req, o) => ({
+  ...o,
+  items: o.items?.map((i) => ({ ...i, image_url: absUrl(req, i.image_url) })),
+});
+
+// ------------------------------------------------------------------ alamat
+router.get('/addresses', (req, res) => {
+  const rows = db.get().prepare('SELECT * FROM addresses WHERE user_id = ? ORDER BY is_default DESC, id DESC').all(req.user.id).map(db.plain);
+  res.json({ data: rows.map((a) => ({ ...a, is_default: !!a.is_default })) });
+});
+
+function saveAddress(req, id) {
+  required(req.body, ['recipient', 'phone', 'address']);
+  const d = db.get();
+  const b = req.body;
+  const isDefault = toBool(b.is_default);
+  return db.transaction(() => {
+    const count = d.prepare('SELECT COUNT(*) AS n FROM addresses WHERE user_id = ?').get(req.user.id).n;
+    const makeDefault = isDefault || count === 0 || (id && count === 1);
+    if (makeDefault) d.prepare('UPDATE addresses SET is_default = 0 WHERE user_id = ?').run(req.user.id);
+    const values = [String(b.label || 'Rumah'), String(b.recipient), normalizePhone(b.phone), String(b.address), String(b.notes || ''), makeDefault ? 1 : 0];
+    if (id) {
+      const r = d.prepare('UPDATE addresses SET label=?, recipient=?, phone=?, address=?, notes=?, is_default=? WHERE id=? AND user_id=?').run(...values, id, req.user.id);
+      if (!r.changes) throw new HttpError(404, 'Alamat tidak ditemukan');
+      return id;
+    }
+    return Number(d.prepare('INSERT INTO addresses (label, recipient, phone, address, notes, is_default, user_id) VALUES (?,?,?,?,?,?,?)').run(...values, req.user.id).lastInsertRowid);
+  });
+}
+
+router.post('/addresses', (req, res) => {
+  const id = saveAddress(req);
+  res.status(201).json({ data: db.plain(db.get().prepare('SELECT * FROM addresses WHERE id = ?').get(id)) });
+});
+
+router.put('/addresses/:id', (req, res) => {
+  const id = saveAddress(req, toInt(req.params.id));
+  res.json({ data: db.plain(db.get().prepare('SELECT * FROM addresses WHERE id = ?').get(id)) });
+});
+
+router.delete('/addresses/:id', (req, res) => {
+  db.get().prepare('DELETE FROM addresses WHERE id = ? AND user_id = ?').run(toInt(req.params.id), req.user.id);
+  res.json({ ok: true });
+});
+
+// ------------------------------------------------------------------ pesanan
+/** Hitung ringkasan belanja sebelum checkout (subtotal, ongkir, total). */
+router.post('/checkout/quote', (req, res) => {
+  const s = settings.all();
+  const items = Array.isArray(req.body.items) ? req.body.items : [];
+  const getP = db.get().prepare('SELECT id, name, price, stock, is_active, unit FROM products WHERE id = ?');
+  const lines = [];
+  const problems = [];
+  for (const it of items) {
+    const p = db.plain(getP.get(toInt(it.product_id)));
+    const qty = toInt(it.quantity);
+    if (!p || !p.is_active) {
+      problems.push({ product_id: it.product_id, message: 'Produk sudah tidak tersedia' });
+      continue;
+    }
+    if (p.stock < qty) problems.push({ product_id: p.id, message: `Stok ${p.name} tinggal ${p.stock} ${p.unit}` });
+    lines.push({ product_id: p.id, name: p.name, price: p.price, quantity: qty, subtotal: p.price * qty });
+  }
+  const subtotal = lines.reduce((a, l) => a + l.subtotal, 0);
+  const method = req.body.delivery_method === 'pickup' ? 'pickup' : 'delivery';
+  const fee = settings.deliveryFee(subtotal, method, s);
+  if (subtotal < s.min_order) problems.push({ message: `Minimal belanja Rp${s.min_order.toLocaleString('id-ID')}` });
+  res.json({
+    data: {
+      lines,
+      subtotal,
+      delivery_fee: fee,
+      total: subtotal + fee,
+      free_delivery_min: s.free_delivery_min,
+      problems,
+    },
+  });
+});
+
+router.post(
+  '/orders',
+  asyncHandler(async (req, res) => {
+    const o = await orders.create(req.user, req.body);
+    res.status(201).json({ data: orderOut(req, o) });
+  })
+);
+
+router.get('/orders', (req, res) => {
+  const d = db.get();
+  const rows = d
+    .prepare(
+      `SELECT o.*, (SELECT COUNT(*) FROM order_items i WHERE i.order_id = o.id) AS item_count,
+              (SELECT name FROM order_items i WHERE i.order_id = o.id ORDER BY id LIMIT 1) AS first_item
+       FROM orders o WHERE o.user_id = ? ORDER BY o.id DESC LIMIT 100`
+    )
+    .all(req.user.id)
+    .map(db.plain)
+    .map((o) => ({ ...o, status_label: orders.STATUS_LABEL[o.status] }));
+  res.json({ data: rows });
+});
+
+function ownOrder(req) {
+  const o = orders.findByCode(req.params.code);
+  if (!o || o.user_id !== req.user.id) throw new HttpError(404, 'Pesanan tidak ditemukan');
+  return o;
+}
+
+router.get(
+  '/orders/:code',
+  asyncHandler(async (req, res) => {
+    const o = await orders.refresh(ownOrder(req));
+    res.json({ data: orderOut(req, orders.detail(o)) });
+  })
+);
+
+router.post('/orders/:code/cancel', (req, res) => {
+  const o = ownOrder(req);
+  if (o.status !== 'pending_payment') throw new HttpError(400, 'Pesanan yang sudah dibayar tidak bisa dibatalkan sendiri. Hubungi toko.');
+  res.json({ data: orderOut(req, orders.detail(orders.cancel(o.id, 'Dibatalkan oleh pembeli'))) });
+});
+
+module.exports = router;

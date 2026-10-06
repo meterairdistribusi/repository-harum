@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "Harum Group",
+    "slug": "harum-group",
+    "scheme": "harumgroup",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0284C7"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "id.harumgroup.app",
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": ["gojek", "shopeeid", "gopay"]
+      }
+    },
+    "android": {
+      "package": "id.harumgroup.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0284C7",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "output": "single"
+    },
+    "plugins": ["expo-router"],
+    "extra": {
+      "apiUrl": ""
+    }
+  }
+}
