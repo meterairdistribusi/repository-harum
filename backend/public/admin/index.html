@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Admin Harum Group</title>
+  <title>Admin Harum Market</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧊</text></svg>">
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,7 +13,7 @@
   <section id="login-view" class="login" hidden>
     <form id="login-form" class="login-card">
       <div class="logo-big">🧊</div>
-      <h1>Harum Group</h1>
+      <h1>Harum Market</h1>
       <p class="muted">Panel Admin</p>
       <label>Email<input name="login" type="email" required autocomplete="username" placeholder="admin@harumgroup.id"></label>
       <label>Kata sandi<input name="password" type="password" required autocomplete="current-password"></label>
@@ -24,7 +25,7 @@
   <!-- App -->
   <div id="app-view" class="layout" hidden>
     <aside class="sidebar" id="sidebar">
-      <div class="brand"><span class="brand-icon">🧊</span><div><b>Harum Group</b><small>Panel Admin</small></div></div>
+      <div class="brand"><span class="brand-icon">🧊</span><div><b>Harum Market</b><small>Panel Admin</small></div></div>
       <nav id="nav">
         <a href="#/dashboard" data-page="dashboard">📊 Dashboard</a>
         <a href="#/orders" data-page="orders">🧾 Pesanan <span class="pill" id="pending-badge" hidden></span></a>
@@ -48,6 +49,8 @@
 
   <div id="modal" class="modal" hidden><div class="modal-card" id="modal-card"></div></div>
   <div id="toast" class="toast" hidden></div>
+  <script src="/vendor/chart.umd.js"></script>
+  <script src="/vendor/leaflet/leaflet.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

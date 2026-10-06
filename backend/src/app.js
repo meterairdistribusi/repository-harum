@@ -21,6 +21,11 @@ function createApp() {
 
   app.use('/uploads', express.static(config.uploadDir, { maxAge: '7d' }));
   app.use('/admin', express.static(path.join(__dirname, '..', 'public', 'admin')));
+  // Library pihak ketiga disajikan dari node_modules (tidak bergantung CDN)
+  const nm = path.join(__dirname, '..', 'node_modules');
+  app.get('/vendor/chart.umd.js', (_req, res) => res.sendFile(path.join(nm, 'chart.js', 'dist', 'chart.umd.js')));
+  app.use('/vendor/leaflet', express.static(path.join(nm, 'leaflet', 'dist'), { maxAge: '7d' }));
+  app.get('/map-picker', (_req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'map-picker.html')));
   app.get('/', (_req, res) => res.redirect('/admin/'));
 
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Endpoint tidak ditemukan')));

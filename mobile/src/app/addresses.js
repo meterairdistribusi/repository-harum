@@ -35,6 +35,7 @@ export default function Addresses() {
           </Text>
           <Text style={s.addr}>{a.address}</Text>
           {a.notes ? <Text style={s.notes}>Patokan: {a.notes}</Text> : null}
+          <Text style={[s.notes, { color: a.lat != null ? colors.ok : colors.warn }]}>{a.lat != null ? '📍 Titik peta sudah ditandai' : '⚠️ Belum ada titik peta — ketuk Ubah untuk menandai'}</Text>
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
             <Button size="sm" style={{ flex: 1 }} variant="soft" title="Ubah" icon="create-outline" onPress={() => router.push({ pathname: '/address-form', params: { id: a.id } })} />
             <Button

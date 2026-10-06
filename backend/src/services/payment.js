@@ -35,7 +35,20 @@ const METHODS = {
       { code: 'shopeepay', label: 'ShopeePay' },
     ],
   },
+  cash: {
+    label: 'Tunai (Cash)',
+    description: 'Bayar tunai ke kurir saat pesanan sampai, atau di kasir saat ambil di toko',
+    channels: [{ code: 'cash', label: 'Tunai' }],
+    offline: true, // tidak lewat payment gateway
+  },
 };
+
+/** Metode bayar yang aktif sesuai pengaturan toko. */
+function enabledMethods(s) {
+  return Object.entries(METHODS)
+    .filter(([code]) => code !== 'cash' || s.cash_enabled)
+    .map(([code, m]) => ({ code, label: m.label, description: m.description, channels: m.channels }));
+}
 
 function validateMethod(method, channel) {
   const m = METHODS[method];
@@ -155,4 +168,4 @@ function provider(name = config.payment.provider) {
   return name === 'midtrans' ? midtrans : simulator;
 }
 
-module.exports = { METHODS, validateMethod, provider, midtrans, simulator, mapMidtransStatus };
+module.exports = { METHODS, enabledMethods, validateMethod, provider, midtrans, simulator, mapMidtransStatus };

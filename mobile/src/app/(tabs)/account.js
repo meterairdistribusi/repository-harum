@@ -47,7 +47,7 @@ export default function Account() {
         </Card>
       ) : (
         <Card style={{ gap: 12 }}>
-          <Text style={s.name}>Selamat datang di Harum Group 👋</Text>
+          <Text style={s.name}>Selamat datang di Harum Market 👋</Text>
           <Text style={s.phone}>Masuk atau daftar untuk mulai memesan.</Text>
           <Button title="Masuk" icon="log-in-outline" onPress={() => router.push('/login')} />
           <Button title="Daftar Akun Baru" variant="soft" onPress={() => router.push('/register')} />
@@ -68,7 +68,7 @@ export default function Account() {
 
       <Card style={{ backgroundColor: colors.brandSoft }}>
         <Text style={s.howTitle}>Cara Belanja</Text>
-        {['Pilih produk lalu tekan "Tambah"', 'Buka Keranjang, tekan "Lanjut ke Pembayaran"', 'Pilih diantar / ambil sendiri & cara bayar', 'Bayar dengan QRIS, Transfer Bank, atau E-Wallet', 'Pantau status pesanan di menu Pesanan'].map((t, i) => (
+        {['Pilih produk lalu tekan "Tambah"', 'Buka Keranjang, tekan "Lanjut ke Pembayaran"', 'Pilih diantar / ambil sendiri & cara bayar', 'Bayar dengan QRIS, Transfer Bank, E-Wallet, atau Tunai', 'Pantau status pesanan di menu Pesanan'].map((t, i) => (
           <Text key={i} style={s.how}>
             {i + 1}. {t}
           </Text>
@@ -85,7 +85,7 @@ export default function Account() {
           }}
         />
       )}
-      <Text style={s.version}>Harum Group v1.0.0</Text>
+      <Text style={s.version}>Harum Market v1.1.0 · oleh Harum Group</Text>
     </ScrollView>
   );
 }

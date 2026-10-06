@@ -11,6 +11,10 @@ module.exports = {
   adminPassword: env.ADMIN_PASSWORD || 'admin123',
   dbFile: path.resolve(__dirname, '..', env.DB_FILE || './data/harum.db'),
   uploadDir: path.resolve(__dirname, '..', 'uploads'),
+  maps: {
+    googleKey: env.GOOGLE_MAPS_API_KEY || '',
+    osrmUrl: (env.OSRM_URL || 'https://router.project-osrm.org').replace(/\/$/, ''),
+  },
   payment: {
     provider: (env.PAYMENT_PROVIDER || 'simulator').toLowerCase(),
     midtrans: {

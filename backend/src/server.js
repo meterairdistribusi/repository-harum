@@ -20,7 +20,7 @@ if (!db.get().prepare('SELECT 1 FROM categories').get()) {
 
 const app = createApp();
 app.listen(config.port, '0.0.0.0', () => {
-  console.log(`Harum Group API  : ${config.publicUrl}/api`);
+  console.log(`Harum Market API : ${config.publicUrl}/api`);
   console.log(`Panel Admin      : ${config.publicUrl}/admin`);
   console.log(`Payment provider : ${config.payment.provider}`);
 });

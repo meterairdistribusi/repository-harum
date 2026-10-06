@@ -71,7 +71,7 @@ export default function Home() {
               {greeting()}
               {user ? `, ${user.name.split(' ')[0]}` : ''} 👋
             </Text>
-            <Text style={s.brand}>{store?.store_name || 'Harum Group'}</Text>
+            <Text style={s.brand}>{store?.store_name || 'Harum Market'}</Text>
             <Text style={s.tagline}>{store?.store_tagline}</Text>
           </View>
           <Pressable style={s.cartBtn} onPress={() => router.push('/cart')} accessibilityLabel="Buka keranjang">
@@ -153,14 +153,6 @@ export default function Home() {
               </View>
             ))}
           </View>
-
-          {/* Tentang */}
-          <View style={s.about}>
-            <Text style={s.aboutTitle}>Harum Group — dari hulu ke hilir</Text>
-            <Text style={s.aboutText}>
-              Kami memproduksi sendiri es kristal higienis, mengolahnya menjadi es buah & es serut, hingga menyediakan frozen food dan makanan siap saji. Kualitas terjaga dari pabrik sampai ke tangan Anda.
-            </Text>
-          </View>
         </View>
       </ScrollView>
       <CartBar />
@@ -192,7 +184,4 @@ const s = StyleSheet.create({
   promoText: { flex: 1, fontSize: font.md, color: '#9A3412' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 12 },
   gridItem: { width: '48.5%' },
-  about: { marginTop: 28, padding: 18, borderRadius: radius.lg, backgroundColor: colors.brandSoft },
-  aboutTitle: { fontSize: font.md, fontWeight: '800', color: colors.brandDark },
-  aboutText: { fontSize: font.sm, color: colors.brandDark, marginTop: 6, lineHeight: 22 },
 });

@@ -1,6 +1,7 @@
 const db = require('../db');
 const settings = require('./settings');
 const payment = require('./payment');
+const shipping = require('./shipping');
 const { HttpError, orderCode, toInt, sqlDate } = require('../utils');
 
 const STATUS_LABEL = {
@@ -68,19 +69,26 @@ async function create(user, body) {
 
   const paymentMethod = body.payment_method;
   const channel = payment.validateMethod(paymentMethod, body.payment_channel);
+  const isCash = paymentMethod === 'cash';
+  if (isCash && !s.cash_enabled) throw new HttpError(400, 'Pembayaran tunai sedang tidak tersedia');
 
   let recipient = String(body.recipient || user.name || '').trim();
   let phone = String(body.phone || user.phone || '').trim();
   let address = String(body.address || '').trim();
+  let addressRow = null;
   if (body.address_id) {
-    const a = db.plain(db.get().prepare('SELECT * FROM addresses WHERE id = ? AND user_id = ?').get(body.address_id, user.id));
-    if (!a) throw new HttpError(400, 'Alamat tidak ditemukan');
-    recipient = a.recipient;
-    phone = a.phone;
-    address = a.address + (a.notes ? ` (${a.notes})` : '');
+    addressRow = db.plain(db.get().prepare('SELECT * FROM addresses WHERE id = ? AND user_id = ?').get(body.address_id, user.id));
+    if (!addressRow) throw new HttpError(400, 'Alamat tidak ditemukan');
+    recipient = addressRow.recipient;
+    phone = addressRow.phone;
+    address = addressRow.address + (addressRow.notes ? ` (${addressRow.notes})` : '');
   }
   if (deliveryMethod === 'delivery' && !address) throw new HttpError(400, 'Alamat pengiriman wajib diisi');
   if (!phone) throw new HttpError(400, 'Nomor HP wajib diisi');
+
+  // Ongkir dihitung lebih dulu (bisa memanggil layanan peta), di luar transaksi database
+  const subtotalEstimate = estimateSubtotal(items);
+  const ship = await shipping.quote({ subtotal: subtotalEstimate, method: deliveryMethod, address: addressRow, settings: s });
 
   const order = db.transaction((d) => {
     const getProduct = d.prepare('SELECT * FROM products WHERE id = ?');
@@ -101,28 +109,49 @@ async function create(user, body) {
 
     const subtotal = lines.reduce((a, l) => a + l.subtotal, 0);
     if (subtotal < s.min_order) throw new HttpError(400, `Minimal belanja Rp${s.min_order.toLocaleString('id-ID')}`);
-    const fee = settings.deliveryFee(subtotal, deliveryMethod, s);
+    const fee = ship.fee;
     const total = subtotal + fee;
 
     const res = d
       .prepare(
-        `INSERT INTO orders (code, user_id, delivery_method, recipient, phone, address, notes, subtotal, delivery_fee, total, payment_method, payment_channel)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO orders (code, user_id, status, delivery_method, recipient, phone, address, notes, subtotal, delivery_fee, distance_km, total, payment_method, payment_channel, payment_provider)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(orderCode(), user.id, deliveryMethod, recipient, phone, deliveryMethod === 'delivery' ? address : '', String(body.notes || ''), subtotal, fee, total, paymentMethod, channel);
+      .run(
+        orderCode(),
+        user.id,
+        isCash ? 'processing' : 'pending_payment',
+        deliveryMethod,
+        recipient,
+        phone,
+        deliveryMethod === 'delivery' ? address : '',
+        String(body.notes || ''),
+        subtotal,
+        fee,
+        ship.distance_km,
+        total,
+        paymentMethod,
+        channel,
+        isCash ? 'cash' : ''
+      );
     const orderId = Number(res.lastInsertRowid);
 
     const insItem = d.prepare(
-      'INSERT INTO order_items (order_id, product_id, name, unit, image_url, price, quantity, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO order_items (order_id, product_id, name, unit, image_url, price, cost_price, quantity, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     const decStock = d.prepare('UPDATE products SET stock = stock - ? WHERE id = ?');
     for (const l of lines) {
-      insItem.run(orderId, l.product.id, l.product.name, l.product.unit, l.product.image_url, l.product.price, l.quantity, l.subtotal);
+      insItem.run(orderId, l.product.id, l.product.name, l.product.unit, l.product.image_url, l.product.price, l.product.cost_price, l.quantity, l.subtotal);
       decStock.run(l.quantity, l.product.id);
     }
     addHistory(orderId, 'pending_payment', 'Pesanan dibuat');
+    if (isCash) {
+      addHistory(orderId, 'processing', deliveryMethod === 'delivery' ? 'Bayar tunai ke kurir saat pesanan sampai' : 'Bayar tunai di kasir saat mengambil pesanan');
+    }
     return findById(orderId);
   });
+
+  if (isCash) return detail(order);
 
   try {
     const items = db.get().prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id).map(db.plain);
@@ -135,6 +164,12 @@ async function create(user, body) {
     throw err;
   }
   return detail(findById(order.id));
+}
+
+/** Perkiraan subtotal (untuk menghitung gratis ongkir sebelum transaksi). */
+function estimateSubtotal(items) {
+  const getP = db.get().prepare('SELECT price FROM products WHERE id = ?');
+  return items.reduce((sum, it) => sum + (getP.get(toInt(it.product_id))?.price || 0) * Math.max(0, toInt(it.quantity)), 0);
 }
 
 function restoreStock(orderId) {
@@ -230,6 +265,11 @@ function updateStatus(orderId, status, note = '') {
   if (status === 'shipping' && o.delivery_method !== 'delivery') throw new HttpError(400, 'Pesanan ini diambil di toko');
   if (status === 'ready_pickup' && o.delivery_method !== 'pickup') throw new HttpError(400, 'Pesanan ini diantar');
   db.get().prepare(`UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?`).run(status, orderId);
+  if (status === 'completed' && o.payment_method === 'cash' && o.payment_status !== 'paid') {
+    // Pesanan tunai selesai = uang sudah diterima kurir/kasir
+    db.get().prepare(`UPDATE orders SET payment_status = 'paid', paid_at = datetime('now') WHERE id = ?`).run(orderId);
+    note = note || 'Pembayaran tunai diterima';
+  }
   addHistory(orderId, status, note);
   return findById(orderId);
 }

@@ -122,8 +122,17 @@ test('alur pesanan QRIS: buat -> bayar (simulasi) -> diproses -> diantar -> sele
   assert.deepEqual(det.body.data.history.map((h) => h.status), ['pending_payment', 'paid', 'processing', 'shipping', 'completed']);
 
   const stats = await call('GET', '/api/admin/stats', { token: admin });
-  assert.equal(stats.body.data.today.orders, 1);
-  assert.equal(stats.body.data.today.revenue, 40000);
+  const st = stats.body.data;
+  assert.equal(st.today.orders, 1);
+  assert.equal(st.today.revenue, 30000); // omzet = penjualan produk, tanpa ongkir
+  const cost = db.get().prepare('SELECT cost_price FROM products WHERE id = 5').get().cost_price;
+  assert.ok(cost > 0);
+  assert.equal(st.today.cost, 2 * cost);
+  assert.equal(st.today.profit, 30000 - 2 * cost);
+  assert.equal(st.monthly.length, 12);
+  assert.equal(st.monthly[new Date().getMonth()].revenue, 30000);
+  assert.equal(st.monthly[new Date().getMonth()].profit, 30000 - 2 * cost);
+  assert.ok(Math.abs(st.month.margin_on_cost - (30000 - 2 * cost) / (2 * cost)) < 1e-9);
 });
 
 test('batal pesanan mengembalikan stok', async () => {
@@ -144,7 +153,7 @@ test('validasi pesanan: stok, metode bayar, alamat', async () => {
   const stock = await call('POST', '/api/me/orders', { token: customer, body: { items: [{ product_id: 1, quantity: 99999 }], delivery_method: 'pickup', payment_method: 'qris' } });
   assert.equal(stock.status, 400);
   assert.match(stock.body.error, /Stok/);
-  const method = await call('POST', '/api/me/orders', { token: customer, body: { items: [{ product_id: 1, quantity: 5 }], delivery_method: 'pickup', payment_method: 'cash' } });
+  const method = await call('POST', '/api/me/orders', { token: customer, body: { items: [{ product_id: 1, quantity: 5 }], delivery_method: 'pickup', payment_method: 'kredit' } });
   assert.equal(method.status, 400);
   const ch = await call('POST', '/api/me/orders', { token: customer, body: { items: [{ product_id: 1, quantity: 5 }], delivery_method: 'pickup', payment_method: 'ewallet', payment_channel: 'bca' } });
   assert.equal(ch.status, 400);
@@ -191,5 +200,132 @@ test('admin kelola produk & pengaturan', async () => {
   await call('PUT', '/api/admin/settings', { token: admin, body: { is_open: true } });
 
   const store = await call('GET', '/api/store');
-  assert.equal(store.body.data.payment_methods.length, 3);
+  assert.deepEqual(store.body.data.payment_methods.map((m) => m.code), ['qris', 'bank_transfer', 'ewallet', 'cash']);
+  assert.equal(store.body.data.store_location_set, false);
+});
+
+test('harga modal tidak bocor ke pelanggan', async () => {
+  const list = await call('GET', '/api/products');
+  assert.ok(list.body.data.length > 0);
+  assert.ok(list.body.data.every((p) => !('cost_price' in p)));
+  assert.ok(!('cost_price' in (await call('GET', '/api/products/1')).body.data));
+  const orders = await call('GET', '/api/me/orders', { token: customer });
+  const det = await call('GET', `/api/me/orders/${orders.body.data[0].code}`, { token: customer });
+  assert.ok(det.body.data.items.every((i) => !('cost_price' in i)));
+});
+
+test('pembayaran tunai: langsung diproses, lunas saat selesai', async () => {
+  const r = await call('POST', '/api/me/orders', {
+    token: customer,
+    body: { items: [{ product_id: 1, quantity: 5 }], delivery_method: 'pickup', payment_method: 'cash' },
+  });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  const o = r.body.data;
+  assert.equal(o.status, 'processing');
+  assert.equal(o.payment_status, 'unpaid');
+  assert.equal(o.payment_url, '');
+  assert.equal(o.payment_provider, 'cash');
+  for (const s of ['ready_pickup', 'completed']) {
+    const u = await call('POST', `/api/admin/orders/${o.id}/status`, { token: admin, body: { status: s } });
+    assert.equal(u.status, 200, JSON.stringify(u.body));
+  }
+  const done = await call('GET', `/api/me/orders/${o.code}`, { token: customer });
+  assert.equal(done.body.data.payment_status, 'paid');
+  assert.ok(done.body.data.paid_at);
+
+  await call('PUT', '/api/admin/settings', { token: admin, body: { cash_enabled: false } });
+  const off = await call('POST', '/api/me/orders', { token: customer, body: { items: [{ product_id: 1, quantity: 5 }], delivery_method: 'pickup', payment_method: 'cash' } });
+  assert.equal(off.status, 400);
+  assert.ok(!(await call('GET', '/api/store')).body.data.payment_methods.some((m) => m.code === 'cash'));
+  await call('PUT', '/api/admin/settings', { token: admin, body: { cash_enabled: true } });
+});
+
+test('ongkir berdasarkan jarak tempuh di peta', async () => {
+  // Server OSRM tiruan: jarak jalan 5,3 km
+  const http = require('node:http');
+  let hits = 0;
+  const osrm = http.createServer((req, res) => {
+    hits++;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ code: 'Ok', routes: [{ distance: 5300 }] }));
+  });
+  await new Promise((r) => osrm.listen(0, r));
+  config.maps.osrmUrl = `http://127.0.0.1:${osrm.address().port}`;
+
+  await call('PUT', '/api/admin/settings', {
+    token: admin,
+    body: { shipping_mode: 'distance', store_lat: -6.2, store_lng: 106.8, shipping_base_fee: 8000, shipping_base_km: 2, shipping_per_km: 2500, shipping_max_km: 15, free_delivery_min: 0 },
+  });
+  const store = (await call('GET', '/api/store')).body.data;
+  assert.equal(store.shipping_mode, 'distance');
+  assert.equal(store.store_location_set, true);
+
+  const noPin = await call('POST', '/api/me/addresses', { token: customer, body: { recipient: 'A', phone: '081234567890', address: 'Tanpa titik' } });
+  const quoteNoPin = await call('POST', '/api/me/checkout/quote', { token: customer, body: { items: [{ product_id: 2, quantity: 2 }], delivery_method: 'delivery', address_id: noPin.body.data.id } });
+  assert.match(quoteNoPin.body.data.shipping_error, /peta/);
+
+  const pin = await call('POST', '/api/me/addresses', { token: customer, body: { recipient: 'B', phone: '081234567890', address: 'Ada titik', lat: -6.24, lng: 106.83 } });
+  assert.equal(pin.body.data.lat, -6.24);
+  const q = await call('POST', '/api/me/checkout/quote', { token: customer, body: { items: [{ product_id: 2, quantity: 2 }], delivery_method: 'delivery', address_id: pin.body.data.id } });
+  assert.equal(q.body.data.distance_km, 5.3);
+  assert.equal(q.body.data.delivery_fee, 8000 + 4 * 2500); // 2 km pertama 8000, sisa 3,3 km dibulatkan 4 km
+  assert.equal(q.body.data.problems.length, 0);
+
+  const o = await call('POST', '/api/me/orders', { token: customer, body: { items: [{ product_id: 2, quantity: 2 }], delivery_method: 'delivery', address_id: pin.body.data.id, payment_method: 'cash' } });
+  assert.equal(o.status, 201, JSON.stringify(o.body));
+  assert.equal(o.body.data.delivery_fee, 18000);
+  assert.equal(o.body.data.distance_km, 5.3);
+  assert.equal(hits, 1); // jarak di-cache
+
+  const preview = await call('GET', '/api/admin/shipping/preview?lat=-6.3&lng=106.9', { token: admin });
+  assert.equal(preview.body.data.distance_km, 5.3);
+
+  // Di luar jangkauan
+  await call('PUT', '/api/admin/settings', { token: admin, body: { shipping_max_km: 5 } });
+  const far = await call('POST', '/api/me/orders', { token: customer, body: { items: [{ product_id: 2, quantity: 2 }], delivery_method: 'delivery', address_id: pin.body.data.id, payment_method: 'cash' } });
+  assert.equal(far.status, 400);
+  assert.match(far.body.error, /jangkauan/);
+
+  // Layanan peta mati -> perkiraan garis lurus
+  osrm.close();
+  config.maps.osrmUrl = 'http://127.0.0.1:1';
+  await call('PUT', '/api/admin/settings', { token: admin, body: { shipping_max_km: 50 } });
+  const pin2 = await call('POST', '/api/me/addresses', { token: customer, body: { recipient: 'C', phone: '081234567890', address: 'Lain', lat: -6.25, lng: 106.85 } });
+  const est = await call('POST', '/api/me/checkout/quote', { token: customer, body: { items: [{ product_id: 2, quantity: 2 }], delivery_method: 'delivery', address_id: pin2.body.data.id } });
+  assert.equal(est.body.data.distance_estimated, true);
+  assert.ok(est.body.data.distance_km > 7 && est.body.data.distance_km < 12);
+
+  await call('PUT', '/api/admin/settings', { token: admin, body: { shipping_mode: 'flat', free_delivery_min: 150000 } });
+});
+
+test('migrasi database versi lama (tanpa metode cash)', () => {
+  const { DatabaseSync } = require('node:sqlite');
+  const os = require('node:os');
+  const path = require('node:path');
+  const fs = require('node:fs');
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'harum-')), 'old.db');
+  const old = new DatabaseSync(file);
+  old.exec(`CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, phone TEXT UNIQUE, email TEXT UNIQUE, password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'customer', created_at TEXT NOT NULL DEFAULT (datetime('now')));
+    CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL UNIQUE, user_id INTEGER NOT NULL REFERENCES users(id), status TEXT NOT NULL DEFAULT 'pending_payment', delivery_method TEXT NOT NULL, recipient TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', address TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', subtotal INTEGER NOT NULL, delivery_fee INTEGER NOT NULL DEFAULT 0, total INTEGER NOT NULL, payment_method TEXT NOT NULL CHECK (payment_method IN ('qris','bank_transfer','ewallet')), payment_channel TEXT NOT NULL DEFAULT '', payment_status TEXT NOT NULL DEFAULT 'unpaid', payment_provider TEXT NOT NULL DEFAULT '', payment_ref TEXT NOT NULL DEFAULT '', payment_url TEXT NOT NULL DEFAULT '', payment_expires_at TEXT, paid_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
+    CREATE TABLE order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE, product_id INTEGER, name TEXT NOT NULL, unit TEXT NOT NULL DEFAULT 'pcs', image_url TEXT NOT NULL DEFAULT '', price INTEGER NOT NULL, quantity INTEGER NOT NULL, subtotal INTEGER NOT NULL);
+    CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    INSERT INTO users (name, password_hash) VALUES ('x', 'x');
+    INSERT INTO orders (code, user_id, delivery_method, subtotal, total, payment_method) VALUES ('LAMA-1', 1, 'pickup', 5000, 5000, 'qris');
+    INSERT INTO order_items (order_id, name, price, quantity, subtotal) VALUES (1, 'Es', 5000, 1, 5000);
+    INSERT INTO settings VALUES ('store_name', 'Harum Group'), ('store_tagline', 'Segar dari hulu hingga hilir');`);
+  old.close();
+
+  const current = db.get();
+  const migrated = db.open(file);
+  try {
+    assert.equal(migrated.prepare('SELECT code FROM orders').get().code, 'LAMA-1');
+    assert.equal(migrated.prepare('SELECT cost_price FROM order_items').get().cost_price, 0);
+    assert.deepEqual(migrated.prepare('PRAGMA foreign_key_check').all(), []);
+    migrated.prepare(`INSERT INTO orders (code, user_id, delivery_method, subtotal, total, payment_method) VALUES ('BARU', 1, 'pickup', 1, 1, 'cash')`).run();
+    assert.equal(migrated.prepare(`SELECT value FROM settings WHERE key = 'store_name'`).get().value, 'Harum Market');
+    assert.equal(migrated.prepare(`SELECT value FROM settings WHERE key = 'store_tagline'`).get(), undefined);
+  } finally {
+    migrated.close();
+    db._set(current);
+  }
 });

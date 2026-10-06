@@ -9,13 +9,14 @@ import { useCart } from '../context/cart';
 import { useStore } from '../context/store';
 import { api } from '../lib/api';
 import { notify } from '../lib/dialog';
-import { rupiah } from '../lib/format';
+import { km, rupiah } from '../lib/format';
 import { colors, font, radius } from '../lib/theme';
 
 const METHOD_UI = {
   qris: { icon: 'qr-code', hint: 'Bisa dibayar pakai GoPay, OVO, DANA, ShopeePay, LinkAja & semua m-banking' },
   bank_transfer: { icon: 'business', hint: 'Transfer ke nomor Virtual Account, otomatis terkonfirmasi' },
   ewallet: { icon: 'wallet', hint: 'Langsung buka aplikasi dompet digital Anda' },
+  cash: { icon: 'cash', hint: 'Bayar tunai saat pesanan diterima' },
 };
 
 function Step({ n, title }) {
@@ -39,7 +40,7 @@ export default function Checkout() {
   const [method, setMethod] = useState('qris');
   const [channel, setChannel] = useState('qris');
   const [notes, setNotes] = useState('');
-  const [quote, setQuote] = useState(null);
+  const [quoteState, setQuote] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const placed = useRef(false);
 
@@ -61,13 +62,17 @@ export default function Checkout() {
 
   const items = cart.items.map((i) => ({ product_id: i.product.id, quantity: i.quantity }));
   const itemsKey = JSON.stringify(items);
+  const quoteKey = JSON.stringify([itemsKey, delivery, delivery === 'delivery' ? addressId : null]);
 
   useEffect(() => {
     if (!auth.user) return;
-    api('/me/checkout/quote', { method: 'POST', body: { items: JSON.parse(itemsKey), delivery_method: delivery } })
-      .then((r) => setQuote(r.data))
+    const key = quoteKey;
+    api('/me/checkout/quote', { method: 'POST', body: { items: JSON.parse(itemsKey), delivery_method: delivery, address_id: delivery === 'delivery' ? addressId : undefined } })
+      .then((r) => setQuote({ key, data: r.data }))
       .catch(() => {});
-  }, [itemsKey, delivery, auth.user]);
+  }, [itemsKey, delivery, addressId, auth.user, quoteKey]);
+  // Ringkasan lama disembunyikan selama ringkasan untuk pilihan terbaru sedang dihitung
+  const quote = quoteState?.key === quoteKey ? quoteState.data : null;
 
   const pickMethod = (m) => {
     setMethod(m);
@@ -84,7 +89,8 @@ export default function Checkout() {
         body: { items, delivery_method: delivery, address_id: delivery === 'delivery' ? addressId : undefined, payment_method: method, payment_channel: channel, notes },
       });
       placed.current = true;
-      router.replace(`/payment/${r.data.code}`);
+      // Tunai tidak perlu halaman pembayaran — langsung ke status pesanan
+      router.replace(method === 'cash' ? `/order/${r.data.code}` : `/payment/${r.data.code}`);
       cart.clear();
     } catch (e) {
       notify('Pesanan gagal dibuat', e.message);
@@ -109,7 +115,7 @@ export default function Checkout() {
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
         {/* 1. Pengiriman */}
         <Step n={1} title="Cara menerima pesanan" />
-        {store.delivery_enabled && <OptionCard selected={delivery === 'delivery'} onPress={() => setDelivery('delivery')} icon="bicycle" title="Diantar ke rumah" subtitle={store.free_delivery_min ? `Gratis ongkir min. ${rupiah(store.free_delivery_min)}` : `Ongkir ${rupiah(store.delivery_fee)}`} />}
+        {store.delivery_enabled && <OptionCard selected={delivery === 'delivery'} onPress={() => setDelivery('delivery')} icon="bicycle" title="Diantar ke rumah" subtitle={[store.shipping_mode === 'distance' ? 'Ongkir sesuai jarak' : `Ongkir ${rupiah(store.delivery_fee)}`, store.free_delivery_min ? `gratis min. ${rupiah(store.free_delivery_min)}` : ''].filter(Boolean).join(' · ')} />}
         {store.pickup_enabled && <OptionCard selected={delivery === 'pickup'} onPress={() => setDelivery('pickup')} icon="storefront" title="Ambil sendiri di toko" subtitle="Tanpa ongkir" />}
 
         {delivery === 'delivery' ? (
@@ -128,6 +134,17 @@ export default function Checkout() {
               <Ionicons name="add-circle" size={22} color={colors.brand} />
               <Text style={s.addAddrText}>{addresses.length ? 'Tambah alamat lain' : 'Tambah alamat pengiriman'}</Text>
             </Pressable>
+            {quote?.shipping_error ? (
+              <View style={s.shipErr}>
+                <Text style={s.shipErrText}>⚠️ {quote.shipping_error}</Text>
+                {addressId ? <Button size="sm" variant="accent" icon="map" title="Tandai Lokasi di Peta" onPress={() => router.push({ pathname: '/address-form', params: { id: addressId } })} /> : null}
+              </View>
+            ) : quote?.distance_km != null ? (
+              <Text style={s.distance}>
+                📍 Jarak tempuh dari toko: <Text style={{ fontWeight: '800' }}>{km(quote.distance_km)}</Text>
+                {quote.distance_estimated ? ' (perkiraan)' : ''}
+              </Text>
+            ) : null}
           </>
         ) : (
           <Card style={{ backgroundColor: colors.brandSoft }}>
@@ -140,7 +157,14 @@ export default function Checkout() {
         {/* 2. Pembayaran */}
         <Step n={2} title="Pilih cara bayar" />
         {methods.map((m) => (
-          <OptionCard key={m.code} selected={method === m.code} onPress={() => pickMethod(m.code)} icon={METHOD_UI[m.code]?.icon} title={m.label} subtitle={METHOD_UI[m.code]?.hint || m.description} />
+          <OptionCard
+            key={m.code}
+            selected={method === m.code}
+            onPress={() => pickMethod(m.code)}
+            icon={METHOD_UI[m.code]?.icon}
+            title={m.label}
+            subtitle={m.code === 'cash' ? (delivery === 'delivery' ? 'Bayar tunai ke kurir saat pesanan sampai' : 'Bayar tunai di kasir saat ambil pesanan') : METHOD_UI[m.code]?.hint || m.description}
+          />
         ))}
         {currentMethod && currentMethod.channels.length > 1 && (
           <>
@@ -180,10 +204,14 @@ export default function Checkout() {
           ))}
           <View style={s.divider} />
           <Row label="Subtotal" value={rupiah(quote?.subtotal ?? cart.subtotal)} />
-          <Row label="Ongkos kirim" value={quote ? (quote.delivery_fee ? rupiah(quote.delivery_fee) : 'GRATIS') : '…'} color={quote && !quote.delivery_fee ? colors.ok : undefined} />
+          <Row
+            label={quote?.distance_km != null ? `Ongkos kirim (${km(quote.distance_km)})` : 'Ongkos kirim'}
+            value={!quote ? '…' : quote.shipping_error ? '-' : quote.delivery_fee ? rupiah(quote.delivery_fee) : 'GRATIS'}
+            color={quote && !quote.delivery_fee && !quote.shipping_error ? colors.ok : undefined}
+          />
           <View style={s.divider} />
           <Row label="Total Bayar" value={rupiah(quote?.total ?? cart.subtotal)} bold />
-          {quote?.problems?.map((p, i) => (
+          {quote?.problems?.filter((p) => p.type !== 'shipping').map((p, i) => (
             <Text key={i} style={s.problem}>
               ⚠️ {p.message}
             </Text>
@@ -192,9 +220,16 @@ export default function Checkout() {
       </ScrollView>
 
       <SafeAreaView edges={['bottom']} style={s.footer}>
-        <Button title={`Bayar Sekarang · ${rupiah(quote?.total ?? cart.subtotal)}`} icon="shield-checkmark" variant="accent" loading={submitting} disabled={!store.is_open || !!quote?.problems?.length} onPress={submit} />
+        <Button
+          title={`${method === 'cash' ? 'Pesan Sekarang' : 'Bayar Sekarang'} · ${rupiah(quote?.total ?? cart.subtotal)}`}
+          icon={method === 'cash' ? 'checkmark-circle' : 'shield-checkmark'}
+          variant="accent"
+          loading={submitting}
+          disabled={!store.is_open || !quote || !!quote.problems?.length}
+          onPress={submit}
+        />
         {!store.is_open && <Text style={s.problem}>Toko sedang tutup, belum bisa menerima pesanan.</Text>}
-        <Text style={s.secure}>🔒 Pembayaran aman & otomatis terkonfirmasi</Text>
+        <Text style={s.secure}>{method === 'cash' ? '💵 Siapkan uang tunai saat pesanan diterima' : '🔒 Pembayaran aman & otomatis terkonfirmasi'}</Text>
       </SafeAreaView>
     </View>
   );
@@ -213,6 +248,9 @@ const s = StyleSheet.create({
   channelActive: { backgroundColor: colors.brand, borderColor: colors.brand },
   channelCode: { fontSize: font.md, fontWeight: '900', color: colors.brandDark },
   channelLabel: { fontSize: 11, color: colors.muted, marginTop: 2 },
+  shipErr: { backgroundColor: colors.dangerSoft, borderRadius: radius.md, padding: 12, marginTop: 10, gap: 10 },
+  shipErrText: { color: '#991B1B', fontWeight: '700', fontSize: font.sm },
+  distance: { color: colors.brandDark, fontSize: font.sm, marginTop: 10, textAlign: 'center' },
   divider: { height: 1, backgroundColor: colors.line, marginVertical: 8 },
   problem: { color: colors.danger, fontWeight: '700', marginTop: 8, textAlign: 'center' },
   footer: { backgroundColor: colors.white, padding: 16, borderTopWidth: 1, borderTopColor: colors.line },

@@ -7,7 +7,8 @@ const { absUrl } = require('../media');
 
 const router = express.Router();
 
-const productOut = (req) => (p) => ({ ...p, image_url: absUrl(req, p.image_url), is_active: !!p.is_active, is_featured: !!p.is_featured });
+// cost_price (harga modal) rahasia toko — tidak dikirim ke pelanggan
+const productOut = (req) => ({ cost_price, ...p }) => ({ ...p, image_url: absUrl(req, p.image_url), is_active: !!p.is_active, is_featured: !!p.is_featured });
 
 router.get('/categories', (req, res) => {
   const rows = db
@@ -74,8 +75,9 @@ router.get('/store', (_req, res) => {
   const s = settings.all();
   res.json({
     data: {
-      ...s,
-      payment_methods: Object.entries(payment.METHODS).map(([code, m]) => ({ code, ...m })),
+      ...settings.publicSettings(s),
+      shipping_mode: s.shipping_mode === 'distance' && s.store_lat !== null ? 'distance' : 'flat',
+      payment_methods: payment.enabledMethods(s),
     },
   });
 });

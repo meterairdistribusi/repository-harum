@@ -1,5 +1,5 @@
 /**
- * Data awal katalog Harum Group. Dijalankan otomatis saat database masih kosong,
+ * Data awal katalog Harum Market. Dijalankan otomatis saat database masih kosong,
  * atau manual: `npm run seed` (hanya mengisi bila katalog kosong).
  */
 const db = require('./db');
@@ -43,9 +43,12 @@ const PRODUCTS = {
   ],
 };
 
+// Perkiraan harga modal (HPP) sebagai persen dari harga jual — ubah di panel admin
+const COST_RATIO = { 'es-kristal': 0.45, 'es-buah': 0.55, 'es-serut': 0.5, 'frozen-food': 0.7, 'siap-saji': 0.6 };
+
 const BANNERS = [
   ['Gratis Ongkir!', 'Belanja min. Rp150.000 bebas ongkos kirim', '#0284C7'],
-  ['Segar Setiap Hari', 'Es kristal higienis langsung dari pabrik kami', '#0D9488'],
+  ['Segar Setiap Hari', 'Es kristal higienis, diantar langsung ke rumah', '#0D9488'],
   ['Stok Frozen Food', 'Praktis untuk bekal & jualan, tinggal goreng', '#EA580C'],
 ];
 
@@ -54,15 +57,15 @@ function seedCatalog() {
   if (d.prepare('SELECT 1 FROM categories').get()) return false;
   db.transaction(() => {
     const insC = d.prepare('INSERT INTO categories (name, slug, icon, color, description, sort_order) VALUES (?,?,?,?,?,?)');
-    const insP = d.prepare('INSERT INTO products (category_id, name, description, price, unit, stock, is_featured) VALUES (?,?,?,?,?,?,?)');
+    const insP = d.prepare('INSERT INTO products (category_id, name, description, price, unit, stock, is_featured, cost_price) VALUES (?,?,?,?,?,?,?,?)');
     CATEGORIES.forEach((c, i) => {
       const id = insC.run(c.name, c.slug, c.icon, c.color, c.description, i).lastInsertRowid;
-      for (const p of PRODUCTS[c.slug]) insP.run(id, ...p);
+      for (const p of PRODUCTS[c.slug]) insP.run(id, ...p, Math.round((p[2] * COST_RATIO[c.slug]) / 100) * 100);
     });
     const insB = d.prepare('INSERT INTO banners (title, subtitle, color, sort_order) VALUES (?,?,?,?)');
     BANNERS.forEach((b, i) => insB.run(...b, i));
   });
-  console.log('[seed] Katalog contoh Harum Group dibuat');
+  console.log('[seed] Katalog contoh Harum Market dibuat');
   return true;
 }
 

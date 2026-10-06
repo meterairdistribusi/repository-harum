@@ -6,11 +6,13 @@ import { Button, Card, ErrorView, Loading, ProductImage, Row, StatusBadge } from
 import { useCart } from '../../context/cart';
 import { useStore } from '../../context/store';
 import { api } from '../../lib/api';
-import { dateTime, payLabel, rupiah } from '../../lib/format';
+import { dateTime, km, payLabel, rupiah } from '../../lib/format';
 import { colors, font, STATUS } from '../../lib/theme';
 
 function stepsFor(order) {
-  return ['pending_payment', 'paid', 'processing', order.delivery_method === 'delivery' ? 'shipping' : 'ready_pickup', 'completed'];
+  const last = [order.delivery_method === 'delivery' ? 'shipping' : 'ready_pickup', 'completed'];
+  // Pesanan tunai tidak melewati tahap pembayaran online
+  return order.payment_method === 'cash' ? ['processing', ...last] : ['pending_payment', 'paid', 'processing', ...last];
 }
 
 export default function OrderDetail() {
@@ -70,15 +72,23 @@ export default function OrderDetail() {
       }
     >
       <Card>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={s.code} numberOfLines={1} adjustsFontSizeToFit>
-            {o.code}
-          </Text>
-          <StatusBadge status={o.status} />
-        </View>
+        <StatusBadge status={o.status} />
+        <Text style={s.code} numberOfLines={1} adjustsFontSizeToFit>
+          {o.code}
+        </Text>
         <Text style={s.muted}>Dipesan {dateTime(o.created_at)}</Text>
         {o.status === 'pending_payment' && <Button style={{ marginTop: 14 }} variant="accent" title="Bayar Sekarang" icon="wallet" onPress={() => router.push(`/payment/${o.code}`)} />}
       </Card>
+
+      {o.payment_method === 'cash' && o.payment_status !== 'paid' && o.status !== 'cancelled' && (
+        <Card style={{ backgroundColor: colors.okSoft, flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+          <Text style={{ fontSize: 34 }}>💵</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: font.md, fontWeight: '800', color: '#166534' }}>Siapkan uang tunai {rupiah(o.total)}</Text>
+            <Text style={{ fontSize: font.sm, color: '#166534', marginTop: 2 }}>{o.delivery_method === 'delivery' ? 'Dibayar ke kurir saat pesanan sampai.' : 'Dibayar di kasir saat mengambil pesanan.'}</Text>
+          </View>
+        </Card>
+      )}
 
       {o.status !== 'cancelled' ? (
         <Card>
@@ -143,20 +153,20 @@ export default function OrderDetail() {
         ))}
         <View style={s.divider} />
         <Row label="Subtotal" value={rupiah(o.subtotal)} />
-        <Row label="Ongkos kirim" value={o.delivery_fee ? rupiah(o.delivery_fee) : 'GRATIS'} />
+        <Row label={o.distance_km != null ? `Ongkos kirim (${km(o.distance_km)})` : 'Ongkos kirim'} value={o.delivery_fee ? rupiah(o.delivery_fee) : 'GRATIS'} />
         <Row label="Total" value={rupiah(o.total)} bold />
         <Row label="Pembayaran" value={payLabel(o)} />
         {o.paid_at ? <Row label="Dibayar" value={dateTime(o.paid_at)} color={colors.ok} /> : null}
       </Card>
 
-      {wa ? <Button variant="outline" icon="logo-whatsapp" title="Tanya Toko via WhatsApp" onPress={() => Linking.openURL(`https://wa.me/${wa}?text=${encodeURIComponent(`Halo Harum Group, saya mau tanya pesanan ${o.code}`)}`)} /> : null}
+      {wa ? <Button variant="outline" icon="logo-whatsapp" title="Tanya Toko via WhatsApp" onPress={() => Linking.openURL(`https://wa.me/${wa}?text=${encodeURIComponent(`Halo Harum Market, saya mau tanya pesanan ${o.code}`)}`)} /> : null}
       {['completed', 'cancelled'].includes(o.status) && <Button variant="soft" icon="repeat" title="Pesan Lagi" onPress={buyAgain} />}
     </ScrollView>
   );
 }
 
 const s = StyleSheet.create({
-  code: { fontSize: font.lg, fontWeight: '900', color: colors.ink, flexShrink: 1, marginRight: 8 },
+  code: { fontSize: font.lg, fontWeight: '900', color: colors.ink, marginTop: 10 },
   muted: { fontSize: font.sm, color: colors.muted, marginTop: 2 },
   h: { fontSize: font.md, fontWeight: '800', color: colors.ink, marginBottom: 10 },
   body: { fontSize: font.md, color: colors.ink, lineHeight: 24 },

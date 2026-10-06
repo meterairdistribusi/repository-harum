@@ -8,7 +8,7 @@ function ensureAdmin() {
   const exists = d.prepare(`SELECT 1 FROM users WHERE role = 'admin'`).get();
   if (exists) return false;
   d.prepare(`INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, 'admin')`).run(
-    'Admin Harum Group',
+    'Admin Harum Market',
     config.adminEmail.toLowerCase(),
     bcrypt.hashSync(config.adminPassword, 10)
   );

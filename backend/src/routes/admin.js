@@ -4,6 +4,7 @@ const path = require('node:path');
 const db = require('../db');
 const orders = require('../services/orders');
 const settings = require('../services/settings');
+const shipping = require('../services/shipping');
 const config = require('../config');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { HttpError, required, toInt, toBool, slugify } = require('../utils');
@@ -13,31 +14,70 @@ const router = express.Router();
 router.use(authenticate, requireAdmin);
 
 // ------------------------------------------------------------------ dashboard
+// Status pesanan yang dihitung sebagai penjualan (termasuk pesanan tunai yang sedang diproses)
+const SALE = `('paid','processing','shipping','ready_pickup','completed')`;
+
+/** Omzet = penjualan produk (tanpa ongkir); modal = harga modal x qty; profit = omzet - modal. */
+function salesSummary(where, ...params) {
+  const r = db.plain(
+    db
+      .get()
+      .prepare(
+        `SELECT COUNT(DISTINCT o.id) AS orders, COALESCE(SUM(i.subtotal),0) AS revenue, COALESCE(SUM(i.cost_price * i.quantity),0) AS cost
+         FROM orders o JOIN order_items i ON i.order_id = o.id WHERE o.status IN ${SALE} AND ${where}`
+      )
+      .get(...params)
+  );
+  return { ...r, profit: r.revenue - r.cost, margin_on_cost: r.cost > 0 ? (r.revenue - r.cost) / r.cost : null };
+}
+
 router.get('/stats', (req, res) => {
   const d = db.get();
   const one = (sql, ...p) => db.plain(d.prepare(sql).get(...p));
-  const paidStatuses = `('paid','processing','shipping','ready_pickup','completed')`;
-  const today = one(
-    `SELECT COUNT(*) AS orders, COALESCE(SUM(total),0) AS revenue FROM orders
-     WHERE status IN ${paidStatuses} AND date(created_at, 'localtime') = date('now', 'localtime')`
-  );
-  const month = one(
-    `SELECT COUNT(*) AS orders, COALESCE(SUM(total),0) AS revenue FROM orders
-     WHERE status IN ${paidStatuses} AND strftime('%Y-%m', created_at, 'localtime') = strftime('%Y-%m', 'now', 'localtime')`
-  );
+  const thisYear = String(new Date().getFullYear());
+  const year = /^\d{4}$/.test(String(req.query.year)) ? String(req.query.year) : thisYear;
+
+  const today = salesSummary(`date(o.created_at, 'localtime') = date('now', 'localtime')`);
+  const month = salesSummary(`strftime('%Y-%m', o.created_at, 'localtime') = strftime('%Y-%m', 'now', 'localtime')`);
+  const yearSum = salesSummary(`strftime('%Y', o.created_at, 'localtime') = ?`, year);
+  const allTime = salesSummary('1 = 1');
+
+  // Grafik garis: omzet, modal & profit per bulan dalam satu tahun
+  const rows = d
+    .prepare(
+      `SELECT CAST(strftime('%m', o.created_at, 'localtime') AS INTEGER) AS m, COUNT(DISTINCT o.id) AS orders,
+              COALESCE(SUM(i.subtotal),0) AS revenue, COALESCE(SUM(i.cost_price * i.quantity),0) AS cost
+       FROM orders o JOIN order_items i ON i.order_id = o.id
+       WHERE o.status IN ${SALE} AND strftime('%Y', o.created_at, 'localtime') = ?
+       GROUP BY m`
+    )
+    .all(year)
+    .map(db.plain);
+  const monthly = Array.from({ length: 12 }, (_, k) => {
+    const r = rows.find((x) => x.m === k + 1) || { orders: 0, revenue: 0, cost: 0 };
+    return { month: k + 1, orders: r.orders, revenue: r.revenue, cost: r.cost, profit: r.revenue - r.cost };
+  });
+  const years = d
+    .prepare(`SELECT DISTINCT strftime('%Y', created_at, 'localtime') AS y FROM orders ORDER BY y DESC`)
+    .all()
+    .map((r) => r.y);
+  if (!years.includes(thisYear)) years.unshift(thisYear);
+
   const byStatus = Object.fromEntries(d.prepare('SELECT status, COUNT(*) AS n FROM orders GROUP BY status').all().map((r) => [r.status, r.n]));
   const daily = d
     .prepare(
-      `SELECT date(created_at, 'localtime') AS day, COUNT(*) AS orders, COALESCE(SUM(total),0) AS revenue FROM orders
-       WHERE status IN ${paidStatuses} AND date(created_at, 'localtime') >= date('now', 'localtime', '-6 days')
+      `SELECT date(o.created_at, 'localtime') AS day, COUNT(DISTINCT o.id) AS orders, COALESCE(SUM(i.subtotal),0) AS revenue
+       FROM orders o JOIN order_items i ON i.order_id = o.id
+       WHERE o.status IN ${SALE} AND date(o.created_at, 'localtime') >= date('now', 'localtime', '-6 days')
        GROUP BY day ORDER BY day`
     )
     .all()
     .map(db.plain);
   const topProducts = d
     .prepare(
-      `SELECT i.name, SUM(i.quantity) AS qty, SUM(i.subtotal) AS revenue FROM order_items i JOIN orders o ON o.id = i.order_id
-       WHERE o.status IN ${paidStatuses} GROUP BY i.name ORDER BY qty DESC LIMIT 5`
+      `SELECT i.name, SUM(i.quantity) AS qty, SUM(i.subtotal) AS revenue, SUM(i.subtotal - i.cost_price * i.quantity) AS profit
+       FROM order_items i JOIN orders o ON o.id = i.order_id
+       WHERE o.status IN ${SALE} GROUP BY i.name ORDER BY qty DESC LIMIT 5`
     )
     .all()
     .map(db.plain);
@@ -46,14 +86,32 @@ router.get('/stats', (req, res) => {
       `SELECT c.name, c.icon, COALESCE(SUM(CASE WHEN o.id IS NOT NULL THEN i.subtotal END),0) AS revenue FROM categories c
        LEFT JOIN products p ON p.category_id = c.id
        LEFT JOIN order_items i ON i.product_id = p.id
-       LEFT JOIN orders o ON o.id = i.order_id AND o.status IN ${paidStatuses}
+       LEFT JOIN orders o ON o.id = i.order_id AND o.status IN ${SALE}
        GROUP BY c.id ORDER BY c.sort_order`
     )
     .all()
     .map(db.plain);
   const lowStock = d.prepare('SELECT id, name, stock, unit FROM products WHERE is_active = 1 AND stock <= 10 ORDER BY stock LIMIT 10').all().map(db.plain);
+  const missingCost = one('SELECT COUNT(*) AS n FROM products WHERE is_active = 1 AND cost_price = 0').n;
   const customers = one(`SELECT COUNT(*) AS n FROM users WHERE role = 'customer'`).n;
-  res.json({ data: { today, month, byStatus, daily, topProducts, byCategory, lowStock, customers, paymentProvider: config.payment.provider } });
+  res.json({
+    data: {
+      today,
+      month,
+      year: { year: Number(year), ...yearSum },
+      allTime,
+      monthly,
+      years,
+      byStatus,
+      daily,
+      topProducts,
+      byCategory,
+      lowStock,
+      missingCost,
+      customers,
+      paymentProvider: config.payment.provider,
+    },
+  });
 });
 
 // ------------------------------------------------------------------ pesanan
@@ -158,6 +216,7 @@ function productValues(req, existing) {
     String(b.name).trim(),
     String(b.description || ''),
     Math.max(0, toInt(b.price)),
+    Math.max(0, toInt(b.cost_price)),
     String(b.unit || 'pcs'),
     image,
     Math.max(0, toInt(b.stock)),
@@ -173,7 +232,7 @@ function removeUpload(url) {
 router.post('/products', upload.single('image'), (req, res) => {
   const r = db
     .get()
-    .prepare('INSERT INTO products (category_id, name, description, price, unit, image_url, stock, is_active, is_featured) VALUES (?,?,?,?,?,?,?,?,?)')
+    .prepare('INSERT INTO products (category_id, name, description, price, cost_price, unit, image_url, stock, is_active, is_featured) VALUES (?,?,?,?,?,?,?,?,?,?)')
     .run(...productValues(req));
   res.status(201).json({ data: db.plain(db.get().prepare('SELECT * FROM products WHERE id = ?').get(r.lastInsertRowid)) });
 });
@@ -183,7 +242,7 @@ router.put('/products/:id', upload.single('image'), (req, res) => {
   const existing = db.plain(db.get().prepare('SELECT * FROM products WHERE id = ?').get(id));
   if (!existing) throw new HttpError(404, 'Produk tidak ditemukan');
   db.get()
-    .prepare('UPDATE products SET category_id=?, name=?, description=?, price=?, unit=?, image_url=?, stock=?, is_active=?, is_featured=? WHERE id=?')
+    .prepare('UPDATE products SET category_id=?, name=?, description=?, price=?, cost_price=?, unit=?, image_url=?, stock=?, is_active=?, is_featured=? WHERE id=?')
     .run(...productValues(req, existing), id);
   res.json({ data: db.plain(db.get().prepare('SELECT * FROM products WHERE id = ?').get(id)) });
 });
@@ -261,5 +320,19 @@ router.get('/customers', (req, res) => {
 // ------------------------------------------------------------------ pengaturan
 router.get('/settings', (_req, res) => res.json({ data: settings.all() }));
 router.put('/settings', (req, res) => res.json({ data: settings.update(req.body || {}) }));
+
+/** Simulasi ongkir dari lokasi toko ke titik tertentu (dipakai di halaman pengaturan). */
+router.get('/shipping/preview', async (req, res) => {
+  const s = { ...settings.all() };
+  for (const k of ['shipping_base_fee', 'shipping_base_km', 'shipping_per_km', 'shipping_max_km', 'store_lat', 'store_lng']) {
+    if (req.query[k] !== undefined && req.query[k] !== '') s[k] = Number(req.query[k]);
+  }
+  const lat = Number(req.query.lat);
+  const lng = Number(req.query.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || s.store_lat === null) throw new HttpError(400, 'Tentukan lokasi toko dan titik tujuan');
+  const d = await shipping.routeDistance({ lat: s.store_lat, lng: s.store_lng }, { lat, lng });
+  const km = Math.round(d.km * 10) / 10;
+  res.json({ data: { distance_km: km, source: d.source, estimated: d.estimated, fee: shipping.feeForDistance(km, s), out_of_range: s.shipping_max_km > 0 && km > s.shipping_max_km } });
+});
 
 module.exports = router;

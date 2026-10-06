@@ -1,6 +1,6 @@
-# Harum Group — Aplikasi Belanja Online
+# Harum Market — Aplikasi Belanja Online
 
-Sistem pemesanan online untuk produk **Harum Group**: es kristal, es buah, es serut, frozen food, dan makanan siap saji.
+**Harum Market** adalah aplikasi belanja online milik **Harum Group** untuk produk es kristal, es buah, es serut, frozen food, dan makanan siap saji.
 
 | Bagian | Folder | Teknologi | Untuk siapa |
 |---|---|---|---|
@@ -17,17 +17,20 @@ Sistem pemesanan online untuk produk **Harum Group**: es kristal, es buah, es se
 - Cari produk, filter per kategori, detail produk & stok
 - Keranjang tersimpan di HP, info "kurang Rp… lagi untuk gratis ongkir"
 - Checkout 3 langkah: **diantar / ambil di toko** → **cara bayar** → catatan
-- Pembayaran **QRIS**, **Transfer Bank (Virtual Account BCA, BNI, BRI, Mandiri, Permata)**, **E-Wallet (GoPay, ShopeePay)**; QRIS juga bisa dibayar pakai OVO, DANA, LinkAja & semua m-banking
+- Pembayaran **QRIS**, **Transfer Bank (Virtual Account BCA, BNI, BRI, Mandiri, Permata)**, **E-Wallet (GoPay, ShopeePay)**, dan **Tunai** (bayar ke kurir saat pesanan sampai / di kasir saat ambil sendiri); QRIS juga bisa dibayar pakai OVO, DANA, LinkAja & semua m-banking
+- Alamat bisa ditandai di **peta** (geser/ketuk peta, cari nama jalan, atau "Gunakan Lokasi Saya"); ongkir dihitung otomatis dari jarak tempuh
 - Status pembayaran terkonfirmasi otomatis, lacak status pesanan (dibayar → disiapkan → diantar/siap diambil → selesai)
 - Riwayat pesanan, pesan lagi, simpan banyak alamat, tanya toko via WhatsApp
 - Daftar cukup nama + nomor HP
 
 **Panel admin** (`http://<server>:4000/admin`)
-- Dashboard: omzet hari ini & bulan ini, grafik 7 hari, penjualan per lini bisnis, produk terlaris, stok menipis
+- Dashboard: omzet & profit hari ini / bulan ini, **grafik garis omzet & profit per bulan** (pilih tahun; arahkan kursor atau sentuh titik untuk melihat omzet, profit, modal, margin & jumlah pesanan), **diagram donat keuntungan vs modal** (persentase keuntungan terhadap modal; bulan ini / tahun / semua waktu), grafik 7 hari, penjualan per kategori, produk terlaris + untungnya, stok menipis
 - Kelola pesanan: filter status, cari, ubah status, konfirmasi bayar manual, batalkan (stok kembali otomatis), tombol WhatsApp pelanggan; notifikasi bunyi saat ada pesanan baru dibayar
-- Produk & stok (upload foto, harga, satuan, produk unggulan, ubah stok langsung di tabel)
+- Produk & stok (upload foto, harga jual, **harga modal/HPP** dengan hitungan untung per produk, satuan, produk unggulan, ubah stok langsung di tabel)
+- Pesanan tunai: muncul sebagai "Sedang Disiapkan" dengan keterangan "Tagih tunai Rp…"; otomatis tercatat **lunas** saat pesanan diselesaikan
 - Kategori, banner promo, daftar pelanggan
-- Pengaturan: nama toko, jam buka, buka/tutup toko, ongkir, gratis ongkir, minimal belanja, batas waktu bayar
+- Pengaturan: nama toko, jam buka, buka/tutup toko, aktif/nonaktif pembayaran tunai, gratis ongkir, minimal belanja, batas waktu bayar
+- **Ongkir**: tarif tetap, atau **sesuai jarak tempuh di peta** — tandai lokasi toko di peta, atur tarif dasar untuk N km pertama + tarif per km + jarak maksimal, lalu uji dengan mode "Cek ongkir ke titik"
 
 ![Panel admin](docs/panel-admin.png)
 
@@ -46,8 +49,10 @@ npm start
 
 - API: `http://localhost:4000/api`
 - Panel admin: `http://localhost:4000/admin` — login awal `admin@harumgroup.id` / `admin123` (**ganti** lewat `.env` sebelum dipakai sungguhan)
-- Saat pertama jalan, database diisi contoh katalog Harum Group (bisa diubah/hapus dari panel admin).
+- Saat pertama jalan, database diisi contoh katalog Harum Market (bisa diubah/hapus dari panel admin).
 - Tes otomatis: `npm test`
+
+Catatan: atur zona waktu server ke WIB (`TZ=Asia/Jakarta`) agar laporan harian/bulanan tepat.
 
 ### 2. Aplikasi mobile
 
@@ -87,11 +92,24 @@ Langkah mengaktifkan Midtrans:
 
 Alur: pelanggan pilih metode → backend membuat transaksi Midtrans → aplikasi membuka halaman pembayaran → Midtrans mengirim notifikasi (diverifikasi signature SHA-512) → pesanan otomatis berstatus **Pembayaran Diterima**. Pesanan yang tidak dibayar sampai batas waktu otomatis dibatalkan dan stok dikembalikan.
 
+## Ongkir berdasarkan jarak (peta)
+
+1. Panel admin → **Pengaturan** → *Pengiriman & Ongkir* → pilih **Ongkir sesuai jarak tempuh (peta)**.
+2. Klik peta (atau cari alamat / "Lokasi saya") untuk menandai lokasi toko, isi tarif, lalu **Simpan**.
+3. Pelanggan menandai titik alamatnya di peta saat menambah alamat. Ongkir = tarif dasar untuk N km pertama + tarif per km berikutnya (dibulatkan ke atas per km). Alamat di luar jarak maksimal ditolak dengan saran "ambil di toko". Gratis ongkir tetap berlaku.
+
+Jarak tempuh dihitung mengikuti rute jalan:
+- **OSRM / OpenStreetMap** (bawaan, gratis, tanpa API key). Server demo publik OSRM cocok untuk mulai; untuk volume besar sebaiknya pakai server OSRM sendiri (`OSRM_URL`) atau Google.
+- **Google Maps Distance Matrix** — isi `GOOGLE_MAPS_API_KEY` di `backend/.env` (aktifkan *Distance Matrix API* di Google Cloud).
+- Bila layanan peta tidak bisa dihubungi, sistem memakai perkiraan (jarak garis lurus × 1,3) dan menandainya "(perkiraan)".
+
+Peta memakai OpenStreetMap + Leaflet (tanpa API key). Untuk trafik tinggi, gunakan penyedia tile peta berbayar sesuai kebijakan pemakaian OpenStreetMap.
+
 ## Menerbitkan ke Play Store & App Store
 
 1. Siapkan backend di server/VPS dengan domain HTTPS (mis. `https://api.harumgroup.id`), jalankan dengan `NODE_ENV=production`, isi `JWT_SECRET` acak yang panjang, dan **backup file database** (`backend/data/harum.db`) & folder `backend/uploads` secara rutin.
 2. Ubah `EXPO_PUBLIC_API_URL` di `mobile/eas.json` ke domain backend Anda.
-3. Ganti ikon & splash di `mobile/assets/` dengan logo Harum Group.
+3. Ganti ikon & splash di `mobile/assets/` dengan logo Harum Market.
 4. Build di cloud dengan EAS (tidak perlu Android Studio / Mac):
    ```bash
    cd mobile
@@ -112,7 +130,9 @@ backend/
   src/db.js                skema SQLite
   src/routes/              auth, katalog, pelanggan (/api/me), admin (/api/admin), pembayaran (/pay, webhook)
   src/services/orders.js   logika pesanan, stok, status
-  src/services/payment.js  integrasi Midtrans + simulator
+  src/services/payment.js  integrasi Midtrans + simulator + tunai
+  src/services/shipping.js ongkir per jarak (OSRM / Google / perkiraan)
+  public/map-picker.html   halaman peta pemilih titik alamat (dipakai aplikasi)
   public/admin/            panel admin (HTML/CSS/JS, tanpa build)
   test/                    tes API end-to-end (npm test)
 mobile/
@@ -132,4 +152,4 @@ mobile/
 | `POST /api/me/checkout/quote` | Hitung subtotal, ongkir, total |
 | `POST /api/me/orders`, `GET /api/me/orders`, `GET /api/me/orders/:code`, `POST /api/me/orders/:code/cancel` | Pesanan pelanggan |
 | `POST /api/payments/midtrans/notification` | Webhook Midtrans |
-| `/api/admin/*` | stats, orders, products, categories, banners, customers, settings (khusus admin) |
+| `/api/admin/*` | stats (omzet, modal, profit per bulan), orders, products, categories, banners, customers, settings, shipping/preview (khusus admin) |
