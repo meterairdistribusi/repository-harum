@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Admin Harum Group</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧊</text></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Login -->
+  <section id="login-view" class="login" hidden>
+    <form id="login-form" class="login-card">
+      <div class="logo-big">🧊</div>
+      <h1>Harum Group</h1>
+      <p class="muted">Panel Admin</p>
+      <label>Email<input name="login" type="email" required autocomplete="username" placeholder="admin@harumgroup.id"></label>
+      <label>Kata sandi<input name="password" type="password" required autocomplete="current-password"></label>
+      <p class="error" id="login-error"></p>
+      <button class="btn primary block" type="submit">Masuk</button>
+    </form>
+  </section>
+
+  <!-- App -->
+  <div id="app-view" class="layout" hidden>
+    <aside class="sidebar" id="sidebar">
+      <div class="brand"><span class="brand-icon">🧊</span><div><b>Harum Group</b><small>Panel Admin</small></div></div>
+      <nav id="nav">
+        <a href="#/dashboard" data-page="dashboard">📊 Dashboard</a>
+        <a href="#/orders" data-page="orders">🧾 Pesanan <span class="pill" id="pending-badge" hidden></span></a>
+        <a href="#/products" data-page="products">📦 Produk & Stok</a>
+        <a href="#/categories" data-page="categories">🗂️ Kategori</a>
+        <a href="#/banners" data-page="banners">🖼️ Banner Promo</a>
+        <a href="#/customers" data-page="customers">👥 Pelanggan</a>
+        <a href="#/settings" data-page="settings">⚙️ Pengaturan</a>
+      </nav>
+      <button class="btn ghost block" id="logout">Keluar</button>
+    </aside>
+    <main>
+      <header class="topbar">
+        <button class="icon-btn" id="menu-toggle" aria-label="Menu">☰</button>
+        <h2 id="page-title">Dashboard</h2>
+        <span class="muted" id="admin-name"></span>
+      </header>
+      <div id="page" class="page"></div>
+    </main>
+  </div>
+
+  <div id="modal" class="modal" hidden><div class="modal-card" id="modal-card"></div></div>
+  <div id="toast" class="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>
