@@ -171,3 +171,91 @@ label.inline{display:flex;align-items:center;gap:8px;margin:0;color:var(--ink)}
   .vt.edit{display:block;overflow-x:auto}
 }
 .donut-center b.neg{color:var(--danger)}
+
+/* v1.3 — logout atas, laporan, data & backup, responsif HP/tablet */
+.logout-top{background:#FEE2E2;color:var(--danger)}
+.backdrop{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:35}
+.sidebar{overflow-y:auto}
+.report-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-bottom:12px}
+.report-card{margin:0;display:flex;flex-direction:column}
+.report-card p{flex:1;margin:0 0 14px;font-size:14px;line-height:1.5}
+.report-actions{display:flex;gap:8px}
+.report-actions .btn{flex:1}
+.btn.xlsx{background:#DCFCE7;color:#166534}
+.btn.pdf{background:#FEE2E2;color:#991B1B}
+.grid2.narrow{max-width:520px}
+.data-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.data-row input[type=file]{width:auto;flex:1;min-width:200px;margin:0}
+.data-row input{margin:0}
+.danger-zone{border:1.5px solid #FECACA}
+.card h3 + p{margin-top:0}
+@media (max-width:1100px){
+  .cols{grid-template-columns:1fr}
+}
+@media (max-width:900px){
+  .topbar{padding:10px 12px;gap:8px}
+  .topbar h2{font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .admin-name{display:none}
+  .live{font-size:0;padding:0;width:10px;height:10px;border-radius:50%;background:#CBD5E1}
+  .live.on{background:var(--ok)}
+  .modal-card .table-wrap table{min-width:0}
+  .modal-card th,.modal-card td{padding:8px 4px;font-size:13px}
+  .page{padding:12px}
+  .card{padding:14px;margin-bottom:14px}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .stat{padding:12px}
+  .stat .value{font-size:19px;word-break:break-word}
+  .stat .sub{font-size:12px}
+  .chart-box{height:240px}
+  .donut-box{height:230px}
+  .chips{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+  .chip{flex-shrink:0}
+  .toolbar{gap:8px}
+  .toolbar .spacer{display:none}
+  .toolbar > *{flex:1 1 auto}
+  .toolbar input,.toolbar select{min-width:0;width:100%}
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .table-wrap table{min-width:560px}
+  th,td{padding:10px 8px;font-size:14px}
+  .list-row{gap:10px;font-size:14px}
+  .list-row > span:last-child{text-align:right}
+  .modal{padding:0;align-items:end}
+  .modal-card{max-width:none;border-radius:18px 18px 0 0;max-height:94vh;padding:18px 14px}
+  .kv{grid-template-columns:110px 1fr}
+  .kv dd{word-break:break-word}
+  .modal-actions{position:sticky;bottom:-18px;background:#fff;padding:10px 0;margin-bottom:-10px}
+  .modal-actions .btn{flex:1 1 auto}
+  .prod-card{padding:12px}
+  .photos{grid-template-columns:repeat(4,1fr);width:100%}
+  .photos img,.photos .ph{width:100%;height:auto;aspect-ratio:1}
+  .photos img:first-child:last-child,.photos .ph{grid-column:span 1;width:100%;height:auto}
+  .vt th,.vt td{padding:6px 4px;font-size:13px}
+  .single{gap:6px 12px}
+  .map{height:300px}
+  .map-tools > *{flex:1 1 100%}
+  .seg label{flex:1 1 auto}
+  .report-grid{grid-template-columns:1fr}
+}
+@media (max-width:420px){
+  .stats{grid-template-columns:1fr 1fr}
+  .stat .value{font-size:17px}
+  .kv{grid-template-columns:1fr;gap:2px}
+  .kv dt{margin-top:6px}
+}
+/* Tabel bertumpuk jadi kartu di HP (pesanan & pelanggan) */
+@media (max-width:700px){
+  .table-wrap:has(> table.stack){overflow:visible;background:transparent;box-shadow:none;padding:0}
+  .table-wrap table.stack{min-width:0}
+  table.stack thead{display:none}
+  table.stack,table.stack tbody,table.stack tr,table.stack td{display:block;width:100%}
+  table.stack tr{background:#fff;border-radius:14px;box-shadow:var(--shadow);padding:12px 14px;margin-bottom:10px;position:relative}
+  table.stack td{border:0;padding:3px 0;display:flex;gap:10px;justify-content:space-between;text-align:right;font-size:14px}
+  table.stack td[data-label]::before{content:attr(data-label);color:var(--muted);font-size:12px;font-weight:600;text-align:left;flex-shrink:0;padding-top:2px}
+  table.stack td.s-head{display:block;text-align:left;font-size:15px;padding-right:110px;margin-bottom:4px}
+  table.stack td.s-status{position:absolute;top:10px;right:12px;width:auto;padding:0}
+  table.stack td.num{text-align:right}
+}
+@media (max-width:700px){
+  .toolbar input:not([type=month]):not([type=date]){flex:1 1 100%}
+  .toolbar select{flex:1 1 40%}
+}

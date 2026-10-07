@@ -7,6 +7,13 @@ const settings = require('../services/settings');
 const shipping = require('../services/shipping');
 const catalog = require('../services/catalog');
 const realtime = require('../realtime');
+const reports = require('../services/reports');
+const backup = require('../services/backup');
+const multer = require('multer');
+
+const backupUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 150 * 1024 * 1024 } });
+const stamp = () => new Date().toLocaleString('sv-SE').replace(/[-: ]/g, '').slice(0, 12);
+const refreshAllClients = () => ['store', 'categories', 'products', 'banners'].forEach((s) => realtime.catalogChanged(s));
 const config = require('../config');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { HttpError, required, toInt, toBool, slugify } = require('../utils');
@@ -482,6 +489,47 @@ router.get('/customers', (req, res) => {
     .all(q, q, q)
     .map(db.plain);
   res.json({ data: rows });
+});
+
+// ------------------------------------------------------------------ laporan (Excel / PDF)
+router.get('/reports/:type', async (req, res) => {
+  const format = req.query.format === 'pdf' ? 'pdf' : 'xlsx';
+  const rep = reports.build(req.params.type, req.query);
+  const name = `${rep.title.replace(/\s+/g, '-')}_${rep.from}_sd_${rep.to}.${format}`;
+  const buf = format === 'pdf' ? await reports.toPdf(rep) : await reports.toXlsx(rep);
+  res.setHeader('Content-Type', format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+  res.send(buf);
+});
+
+// ------------------------------------------------------------------ backup & data
+router.get('/backup', (req, res) => {
+  const { buffer } = backup.createBackup();
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="harum-market-backup-${stamp()}.zip"`);
+  res.send(buffer);
+});
+
+router.post('/restore', backupUpload.single('backup'), (req, res) => {
+  if (!req.file) throw new HttpError(400, 'Pilih file backup (.zip) terlebih dahulu');
+  const r = backup.restoreBackup(req.file.buffer);
+  refreshAllClients();
+  res.json({ ok: true, ...r });
+});
+
+router.get('/demo-data', (_req, res) => res.json({ data: backup.demoSummary() }));
+
+router.post('/demo-data/remove', (req, res) => {
+  const r = backup.removeDemo({ catalog: req.body.catalog === true || req.body.catalog === '1' });
+  refreshAllClients();
+  res.json({ ok: true, ...r });
+});
+
+router.post('/reset', (req, res) => {
+  if (req.body.confirm !== 'HAPUS') throw new HttpError(400, 'Ketik HAPUS untuk konfirmasi');
+  const r = backup.resetTransactions({ customers: req.body.customers === true });
+  refreshAllClients();
+  res.json({ ok: true, ...r });
 });
 
 // ------------------------------------------------------------------ pengaturan

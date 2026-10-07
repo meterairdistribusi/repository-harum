@@ -16,7 +16,9 @@ if (process.env.NODE_ENV === 'production' && config.payment.provider === 'simula
 
 db.open();
 ensureAdmin();
-if (!db.get().prepare('SELECT 1 FROM categories').get()) {
+const flag = (key) => db.get().prepare(`SELECT 1 FROM settings WHERE key = ? AND value = '1'`).get(key);
+// Katalog contoh hanya diisi untuk toko yang benar-benar baru (bukan setelah admin mengosongkannya)
+if (!db.get().prepare('SELECT 1 FROM categories').get() && !flag('catalog_seed_disabled')) {
   require('./seed').seedCatalog();
 }
 // Prototype: isi data contoh penjualan & biaya bila DEMO_DATA=1

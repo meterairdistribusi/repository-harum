@@ -34,12 +34,16 @@ Akun pelanggan contoh: `081200000000` / `demo123` (atau daftar akun baru). Pemba
 
 **Online tanpa biaya (bisa dibuka siapa saja)**: repo ini sudah berisi `Dockerfile` & `render.yaml`. Di <https://render.com> (paket gratis) pilih *New → Blueprint* → hubungkan repo GitHub ini → isi password admin → *Apply*. Hasilnya alamat seperti `https://harum-market.onrender.com` berisi aplikasi pelanggan (`/app`), panel admin (`/admin`) dan data contoh. Catatan paket gratis: server tidur setelah 15 menit tidak dipakai (bangun ±1 menit) dan data kembali ke awal setiap restart — cukup untuk uji coba, bukan untuk toko yang sudah beroperasi.
 
+> ⚠️ **Data di Render gratis tidak permanen**: setiap server tidur (15 menit tanpa pengunjung), restart, atau deploy ulang, database kembali ke awal. Gunakan menu **Data & Backup → Unduh Backup** setelah mengubah data, dan **Pulihkan** bila data kembali ke awal. Untuk data permanen pakai paket berbayar Render (Starter + disk) atau VPS.
+>
+> Data contoh penjualan diatur oleh variabel `DEMO_DATA` di Render (*Environment*): `1` = diisi data contoh, `0` = tidak (bawaan sekarang).
+
 Pada prototype, ubahan di panel admin (sub menu, foto, harga, kategori, banner, pengaturan) dan perubahan status pesanan **langsung tampil** di aplikasi pelanggan yang sedang terbuka — tanpa refresh.
 
 ## Fitur
 
 **Aplikasi pelanggan**
-- Tampilan sederhana dengan huruf & tombol besar, ramah untuk semua umur
+- Tampilan sederhana & minimalis dengan ukuran huruf/tombol standar yang nyaman untuk usia 16–60 tahun
 - Beranda: banner promo, kategori (dengan gambar asli dari admin), produk terlaris, status toko buka/tutup
 - Cari produk, filter per kategori; detail sub menu dengan **galeri foto** (geser, maks 4) dan **pilihan** ukuran / rasa / porsi — harga & stok mengikuti pilihan
 - **Realtime**: perubahan dari admin dan status pesanan langsung tampil tanpa refresh
@@ -60,6 +64,9 @@ Pada prototype, ubahan di panel admin (sub menu, foto, harga, kategori, banner, 
 - **Kategori**: unggah **1 gambar** sebagai pengganti ikon
 - Pesanan tunai: muncul sebagai "Sedang Disiapkan" dengan keterangan "Tagih tunai Rp…"; otomatis tercatat **lunas** saat pesanan diselesaikan
 - Kategori, banner promo, daftar pelanggan
+- **Laporan** (Excel .xlsx & PDF): laba rugi per bulan, daftar penjualan, produk terjual, biaya operasional, atau laporan lengkap — pilih periode (hari ini, bulan ini, bulan lalu, 3 bulan, tahun ini, atau tanggal bebas)
+- **Data & Backup**: unduh backup (.zip berisi database + semua foto), pulihkan dari backup bila server bermasalah, hapus data contoh (opsional sekaligus katalog contoh), dan "mulai dari nol" (hapus semua transaksi)
+- Tombol **Keluar** selalu terlihat di pojok kanan atas; tampilan menyesuaikan HP & tablet (menu samping bisa dibuka/tutup, tabel pesanan & pelanggan berubah jadi kartu di HP)
 - Pengaturan: nama toko, jam buka, buka/tutup toko, aktif/nonaktif pembayaran tunai, gratis ongkir, minimal belanja, batas waktu bayar
 - **Ongkir**: tarif tetap, atau **sesuai jarak tempuh di peta** — tandai lokasi toko di peta, atur tarif dasar untuk N km pertama + tarif per km + jarak maksimal, lalu uji dengan mode "Cek ongkir ke titik"
 
@@ -168,6 +175,8 @@ backend/
   src/services/catalog.js  sub menu, pilihan (varian), foto
   src/realtime.js          sinkronisasi realtime (WebSocket /ws)
   src/demo.js              data contoh untuk prototype (npm run demo:data)
+  src/services/reports.js  laporan Excel & PDF
+  src/services/backup.js   backup/pulihkan, hapus data contoh
   public/map-picker.html   halaman peta pemilih titik alamat (dipakai aplikasi)
   public/admin/            panel admin (HTML/CSS/JS, tanpa build)
   test/                    tes API end-to-end (npm test)
@@ -189,4 +198,7 @@ mobile/
 | `POST /api/me/checkout/quote` | Hitung subtotal, ongkir, total |
 | `POST /api/me/orders`, `GET /api/me/orders`, `GET /api/me/orders/:code`, `POST /api/me/orders/:code/cancel` | Pesanan pelanggan |
 | `POST /api/payments/midtrans/notification` | Webhook Midtrans |
+| `GET /api/admin/reports/:type?from=&to=&format=xlsx\|pdf` | Laporan `laba-rugi`, `penjualan`, `produk`, `biaya`, `lengkap` |
+| `GET /api/admin/backup`, `POST /api/admin/restore` (multipart `backup`) | Backup & pulihkan (.zip: database + foto) |
+| `GET /api/admin/demo-data`, `POST /api/admin/demo-data/remove`, `POST /api/admin/reset` | Ringkasan & hapus data contoh, kosongkan transaksi |
 | `/api/admin/*` | stats (omzet, modal, biaya operasional, laba bersih per bulan), orders, products (multipart: `images` maks 4, `image_order`, `variants`), variants/:id/stock, categories (multipart `image`), expenses, banners, customers, settings, shipping/preview (khusus admin) |

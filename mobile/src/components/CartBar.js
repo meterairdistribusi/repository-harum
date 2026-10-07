@@ -21,7 +21,7 @@ export default function CartBar() {
         accessibilityLabel={`Lihat keranjang, ${count} barang`}
       >
         <View style={s.icon}>
-          <Ionicons name="cart" size={22} color={colors.brand} />
+          <Ionicons name="cart" size={18} color={colors.brand} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={s.count} numberOfLines={1}>
@@ -40,9 +40,9 @@ export default function CartBar() {
 
 const s = StyleSheet.create({
   wrap: { position: 'absolute', left: 0, right: 0, bottom: 12, paddingHorizontal: 16 },
-  bar: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.brand, borderRadius: radius.lg, padding: 12, paddingRight: 16, elevation: 6, shadowColor: '#0284C7', shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
-  icon: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
-  count: { color: 'rgba(255,255,255,.85)', fontSize: font.sm },
-  total: { color: colors.white, fontSize: font.lg, fontWeight: '800' },
+  bar: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.brand, borderRadius: radius.lg, padding: 8, paddingRight: 14, elevation: 6, shadowColor: '#0284C7', shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
+  icon: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
+  count: { color: 'rgba(255,255,255,.85)', fontSize: font.xs },
+  total: { color: colors.white, fontSize: font.md, fontWeight: '800' },
   cta: { color: colors.white, fontSize: font.sm, fontWeight: '800', flexShrink: 0 },
 });

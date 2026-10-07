@@ -34,16 +34,20 @@
         <a href="#/banners" data-page="banners">🖼️ Banner Promo</a>
         <a href="#/expenses" data-page="expenses">💸 Biaya Operasional</a>
         <a href="#/customers" data-page="customers">👥 Pelanggan</a>
+        <a href="#/reports" data-page="reports">📑 Laporan</a>
+        <a href="#/data" data-page="data">🛡️ Data & Backup</a>
         <a href="#/settings" data-page="settings">⚙️ Pengaturan</a>
       </nav>
-      <button class="btn ghost block" id="logout">Keluar</button>
+      <button class="btn ghost block" data-logout>Keluar</button>
     </aside>
+    <div class="backdrop" id="backdrop" hidden></div>
     <main>
       <header class="topbar">
         <button class="icon-btn" id="menu-toggle" aria-label="Menu">☰</button>
         <h2 id="page-title">Dashboard</h2>
         <span class="live" id="live" title="Sinkronisasi realtime">● Live</span>
-        <span class="muted" id="admin-name"></span>
+        <span class="muted admin-name" id="admin-name"></span>
+        <button class="btn sm logout-top" data-logout title="Keluar dari panel admin">Keluar</button>
       </header>
       <div id="page" class="page"></div>
     </main>

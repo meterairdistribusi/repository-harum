@@ -32,7 +32,7 @@ export function Button({ title, onPress, variant = 'primary', icon, loading, dis
         <ActivityIndicator color={v.fg} />
       ) : (
         <>
-          {icon ? <Ionicons name={icon} size={size === 'sm' ? 18 : 22} color={v.fg} /> : null}
+          {icon ? <Ionicons name={icon} size={size === 'sm' ? 16 : 20} color={v.fg} /> : null}
           <Text style={[styles.btnText, size === 'sm' && { fontSize: font.sm }, { color: v.fg }]}>{title}</Text>
         </>
       )}
@@ -70,7 +70,7 @@ export function Field({ label, error, style, ...props }) {
 }
 
 export function QtyStepper({ value, onChange, max = 999, compact }) {
-  const size = compact ? 34 : 44;
+  const size = compact ? 30 : 38;
   return (
     <View style={styles.stepper}>
       <Pressable
@@ -100,13 +100,13 @@ export function QtyStepper({ value, onChange, max = 999, compact }) {
 }
 
 /** Foto produk → gambar kategori → ikon kategori berwarna (urutan cadangan). */
-export function ProductImage({ product, uri, size, style }) {
-  const dim = size ? { width: size, height: size } : { width: '100%', aspectRatio: 1 };
+export function ProductImage({ product, uri, size, aspect = 1, style }) {
+  const dim = size ? { width: size, height: size } : { width: '100%', aspectRatio: aspect };
   const src = uri || product?.image_url || product?.category_image;
   if (src) return <Image source={{ uri: src }} style={[dim, { borderRadius: radius.md, backgroundColor: colors.brandSoft }, style]} resizeMode="cover" />;
   return (
     <View style={[dim, styles.placeholder, { backgroundColor: product?.category_color || colors.brandSoft }, style]}>
-      <Text style={{ fontSize: size ? size * 0.5 : 56 }}>{product?.category_icon || '🧊'}</Text>
+      <Text style={{ fontSize: size ? size * 0.5 : 40 }}>{product?.category_icon || '🧊'}</Text>
     </View>
   );
 }
@@ -121,7 +121,7 @@ export function ProductCard({ product, qty, onPress, onAdd, onQty, width }) {
   const choose = product.has_variants;
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.pcard, width && { width }, pressed && { opacity: 0.9 }]}>
-      <ProductImage product={product} />
+      <ProductImage product={product} aspect={4 / 3} />
       <Text numberOfLines={2} style={styles.pname}>
         {product.name}
       </Text>
@@ -184,7 +184,7 @@ export function Empty({ icon = 'cube-outline', title, subtitle, action }) {
   return (
     <View style={styles.empty}>
       <View style={styles.emptyIcon}>
-        <Ionicons name={icon} size={48} color={colors.brand} />
+        <Ionicons name={icon} size={38} color={colors.brand} />
       </View>
       <Text style={styles.emptyTitle}>{title}</Text>
       {subtitle ? <Text style={styles.emptySub}>{subtitle}</Text> : null}
@@ -240,36 +240,36 @@ export function OptionCard({ selected, onPress, icon, emoji, title, subtitle, ri
       style={[styles.option, selected && styles.optionActive]}
     >
       <View style={[styles.optionIcon, selected && { backgroundColor: colors.brand }]}>
-        {emoji ? <Text style={{ fontSize: 22 }}>{emoji}</Text> : <Ionicons name={icon} size={24} color={selected ? colors.white : colors.brand} />}
+        {emoji ? <Text style={{ fontSize: 18 }}>{emoji}</Text> : <Ionicons name={icon} size={20} color={selected ? colors.white : colors.brand} />}
       </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.optionTitle}>{title}</Text>
         {subtitle ? <Text style={styles.optionSub}>{subtitle}</Text> : null}
       </View>
       {right}
-      <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={24} color={selected ? colors.brand : '#CBD5E1'} />
+      <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={22} color={selected ? colors.brand : '#CBD5E1'} />
     </Pressable>
   );
 }
 
 export const styles = StyleSheet.create({
   btn: {
-    minHeight: 56,
+    minHeight: 48,
     borderRadius: radius.md,
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     borderWidth: 1.5,
   },
-  btnSm: { minHeight: 42, paddingHorizontal: 14, borderRadius: radius.sm },
+  btnSm: { minHeight: 38, paddingHorizontal: 12, borderRadius: radius.sm },
   btnText: { fontSize: font.md, fontWeight: '700' },
-  card: { backgroundColor: colors.card, borderRadius: radius.lg, padding: 16, ...shadow },
+  card: { backgroundColor: colors.card, borderRadius: radius.lg, padding: 14, ...shadow },
   label: { fontSize: font.sm, fontWeight: '700', color: colors.ink, marginBottom: 6 },
   input: {
-    minHeight: 54,
-    borderWidth: 1.5,
+    minHeight: 46,
+    borderWidth: 1,
     borderColor: colors.line,
     borderRadius: radius.md,
     paddingHorizontal: 16,
@@ -281,19 +281,19 @@ export const styles = StyleSheet.create({
   error: { color: colors.danger, marginTop: 4, fontSize: font.sm },
   stepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
   stepBtn: { borderRadius: radius.sm, backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
-  stepVal: { minWidth: 40, textAlign: 'center', fontSize: font.lg, fontWeight: '800', color: colors.ink },
+  stepVal: { minWidth: 32, textAlign: 'center', fontSize: font.lg, fontWeight: '700', color: colors.ink },
   placeholder: { borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
-  pcard: { backgroundColor: colors.card, borderRadius: radius.lg, padding: 10, ...shadow, flex: 1 },
-  pname: { fontSize: font.md, fontWeight: '700', color: colors.ink, marginTop: 10, minHeight: 44 },
-  pprice: { fontSize: font.md, fontWeight: '800', color: colors.brandDark, marginTop: 4 },
+  pcard: { backgroundColor: colors.card, borderRadius: radius.lg, padding: 8, ...shadow, flex: 1 },
+  pname: { fontSize: font.sm, fontWeight: '600', color: colors.ink, marginTop: 8, minHeight: 38, lineHeight: 19 },
+  pprice: { fontSize: font.md, fontWeight: '800', color: colors.brandDark, marginTop: 2 },
   punit: { fontSize: font.xs, fontWeight: '500', color: colors.muted },
   pvariants: { fontSize: font.xs, color: colors.muted, marginTop: 2 },
-  addBtn: { height: 40, borderRadius: radius.sm, backgroundColor: colors.brand, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  addBtn: { height: 34, borderRadius: radius.sm, backgroundColor: colors.brand, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
   addText: { color: colors.white, fontWeight: '700', fontSize: font.sm },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill },
   badgeText: { fontSize: font.xs, fontWeight: '700' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, minHeight: 300 },
-  emptyIcon: { width: 96, height: 96, borderRadius: 48, backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  emptyIcon: { width: 76, height: 76, borderRadius: 38, backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   emptyTitle: { fontSize: font.lg, fontWeight: '800', color: colors.ink, textAlign: 'center' },
   emptySub: { fontSize: font.md, color: colors.muted, textAlign: 'center', marginTop: 6, lineHeight: 24 },
   row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, gap: 12 },
@@ -306,8 +306,8 @@ export const styles = StyleSheet.create({
   option: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 14,
+    gap: 10,
+    padding: 12,
     borderRadius: radius.md,
     borderWidth: 2,
     borderColor: colors.line,
@@ -315,7 +315,7 @@ export const styles = StyleSheet.create({
     marginBottom: 10,
   },
   optionActive: { borderColor: colors.brand, backgroundColor: '#F0F9FF' },
-  optionIcon: { width: 46, height: 46, borderRadius: 12, backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
+  optionIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
   optionTitle: { fontSize: font.md, fontWeight: '700', color: colors.ink },
   optionSub: { fontSize: font.sm, color: colors.muted, marginTop: 2 },
 });

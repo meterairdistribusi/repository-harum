@@ -57,7 +57,7 @@ export default function Products() {
   return (
     <View style={{ flex: 1 }}>
       <View style={s.searchWrap}>
-        <Ionicons name="search" size={22} color={colors.muted} />
+        <Ionicons name="search" size={20} color={colors.muted} />
         <TextInput ref={inputRef} value={q} onChangeText={setQ} placeholder="Cari produk…" placeholderTextColor="#94A3B8" style={s.search} returnKeyType="search" />
         {q ? (
           <Pressable onPress={() => setQ('')} hitSlop={10} accessibilityLabel="Hapus pencarian">
@@ -78,7 +78,7 @@ export default function Products() {
                 }}
                 style={[s.chip, active && s.chipActive]}
               >
-                {c.image_url ? <Image source={{ uri: c.image_url }} style={s.chipImg} /> : <Text style={{ fontSize: 18 }}>{c.icon}</Text>}
+                {c.image_url ? <Image source={{ uri: c.image_url }} style={s.chipImg} /> : <Text style={{ fontSize: 15 }}>{c.icon}</Text>}
                 <Text style={[s.chipText, active && { color: colors.white }]}>{c.name}</Text>
               </Pressable>
             );
@@ -118,12 +118,12 @@ export default function Products() {
 }
 
 const s = StyleSheet.create({
-  searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginTop: 8, height: 54, borderRadius: radius.md, backgroundColor: colors.white, paddingHorizontal: 14, borderWidth: 1.5, borderColor: colors.line },
+  searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginTop: 8, height: 46, borderRadius: radius.md, backgroundColor: colors.white, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.line },
   search: { flex: 1, fontSize: font.md, color: colors.ink, height: '100%' },
   chips: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, height: 44, borderRadius: radius.pill, backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.line },
-  chipImg: { width: 26, height: 26, borderRadius: 13 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, height: 36, borderRadius: radius.pill, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.line },
+  chipImg: { width: 22, height: 22, borderRadius: 11 },
   chipActive: { backgroundColor: colors.brand, borderColor: colors.brand },
-  chipText: { fontSize: font.sm, fontWeight: '700', color: colors.ink },
+  chipText: { fontSize: font.sm, fontWeight: '600', color: colors.ink },
   desc: { marginHorizontal: 16, fontSize: font.sm, color: colors.muted },
 });
