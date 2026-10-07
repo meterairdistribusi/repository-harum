@@ -565,10 +565,11 @@
                 ? `<table class="vt"><thead><tr><th>${esc(p.option_label || 'Pilihan')}</th><th class="num">Harga</th><th class="num">Modal</th><th class="num">Untung</th><th class="num">Stok</th></tr></thead><tbody>
                   ${p.variants
                     .map(
-                      (v) => `<tr class="${v.is_active ? '' : 'off'}"><td>${esc(v.name)}${v.is_active ? '' : ' <small class="muted">(nonaktif)</small>'}</td><td class="num">${rp(v.price)}</td>
-                      <td class="num">${v.cost_price ? rp(v.cost_price) : '<span class="badge s-pending_payment">Belum diisi</span>'}</td>
-                      <td class="num">${v.cost_price ? `<b class="pos">${rp(v.price - v.cost_price)}</b>` : '-'}</td>
-                      <td class="num"><input type="number" min="0" value="${v.stock}" data-vstock="${v.id}" class="stock-input ${v.stock <= 10 ? 'low' : ''}"></td></tr>`
+                      (v) => `<tr class="${v.is_active ? '' : 'off'}"><td class="v-name">${esc(v.name)}${v.is_active ? '' : ' <small class="muted">(nonaktif)</small>'}</td>
+                      <td class="num v-price" data-label="Harga">${rp(v.price)}</td>
+                      <td class="num v-cost" data-label="Modal">${v.cost_price ? rp(v.cost_price) : '<span class="badge s-pending_payment">Belum diisi</span>'}</td>
+                      <td class="num v-profit" data-label="Untung">${v.cost_price ? `<b class="pos">${rp(v.price - v.cost_price)}</b>` : '-'}</td>
+                      <td class="num v-stock" data-label="Stok"><input type="number" min="0" value="${v.stock}" data-vstock="${v.id}" class="stock-input ${v.stock <= 10 ? 'low' : ''}" aria-label="Stok ${esc(v.name)}"></td></tr>`
                     )
                     .join('')}</tbody></table>`
                 : `<div class="single"><span>Harga <b>${rp(p.price)}</b> / ${esc(p.unit)}</span><span>Modal ${p.cost_price ? rp(p.cost_price) : '<span class="badge s-pending_payment">Belum diisi</span>'}</span>
@@ -577,7 +578,7 @@
               return `<div class="card prod-card ${p.is_active ? '' : 'inactive'}">
                 <div class="photos">${photos}</div>
                 <div class="prod-main">
-                  <div class="prod-head"><div><b class="prod-name">${esc(p.name)}</b>${p.is_featured ? ' ⭐' : ''} ${p.is_active ? '' : '<span class="badge s-cancelled">Disembunyikan</span>'}
+                  <div class="prod-head"><div class="prod-title"><b class="prod-name">${esc(p.name)}</b>${p.is_featured ? ' ⭐' : ''} ${p.is_active ? '' : '<span class="badge s-cancelled">Disembunyikan</span>'}
                     <div class="muted">${p.category_icon} ${esc(p.category_name)} · ${priceText(p)}</div></div>
                     <button class="btn sm" data-edit="${p.id}">Ubah</button></div>
                   ${body}
@@ -742,12 +743,12 @@
   async function renderCategories(el) {
     const r = await api('/admin/categories');
     el.innerHTML = `<div class="toolbar"><span class="muted">Kategori tampil di beranda aplikasi. Unggah 1 gambar untuk menggantikan ikon.</span><div class="spacer"></div><button class="btn primary" id="cat-add">+ Tambah Kategori</button></div>
-      <div class="card table-wrap"><table><thead><tr><th>Kategori</th><th>Deskripsi</th><th class="num">Sub menu</th><th class="num">Urutan</th><th></th></tr></thead><tbody>
+      <div class="card table-wrap"><table class="stack-lines"><thead><tr><th>Kategori</th><th>Deskripsi</th><th class="num">Sub menu</th><th class="num">Urutan</th><th></th></tr></thead><tbody>
       ${r.data
         .map(
-          (c) => `<tr><td><div class="prod">${catThumb(c)}<b>${esc(c.name)}</b></div></td>
-        <td class="muted">${esc(c.description)}</td><td class="num">${c.product_count}</td><td class="num">${c.sort_order}</td>
-        <td class="num"><button class="btn sm" data-edit="${c.id}">Ubah</button></td></tr>`
+          (c) => `<tr><td class="s-head"><div class="prod">${catThumb(c)}<b>${esc(c.name)}</b></div></td>
+        <td class="muted s-desc">${esc(c.description)}</td><td class="num" data-label="Sub menu">${c.product_count}</td><td class="num" data-label="Urutan tampil">${c.sort_order}</td>
+        <td class="num s-status"><button class="btn sm" data-edit="${c.id}">Ubah</button></td></tr>`
         )
         .join('')}</tbody></table></div>`;
     $('#cat-add').onclick = () => categoryForm();
@@ -807,9 +808,9 @@
       <div class="cols">
         <div class="card table-wrap"><h3>Pengeluaran ${esc(label)}</h3>
           ${r.data.length
-            ? `<table><thead><tr><th>Tanggal</th><th>Jenis biaya</th><th>Keterangan</th><th class="num">Nominal</th><th></th></tr></thead><tbody>
-            ${r.data.map((x) => `<tr><td>${new Date(x.date + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</td><td>${esc(x.category)}</td><td class="muted">${esc(x.description)}</td><td class="num"><b>${rp(x.amount)}</b></td><td class="num"><button class="btn sm" data-edit="${x.id}">Ubah</button></td></tr>`).join('')}
-            <tr><td colspan="3" class="num"><b>Total</b></td><td class="num"><b class="neg">${rp(r.total)}</b></td><td></td></tr></tbody></table>`
+            ? `<table class="stack-lines"><thead><tr><th>Tanggal</th><th>Jenis biaya</th><th>Keterangan</th><th class="num">Nominal</th><th></th></tr></thead><tbody>
+            ${r.data.map((x) => `<tr><td class="s-head"><b class="only-mobile">${esc(x.category)} </b><span>${new Date(x.date + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span></td><td class="hide-mobile">${esc(x.category)}</td><td class="muted s-desc">${esc(x.description)}</td><td class="num" data-label="Nominal"><b>${rp(x.amount)}</b></td><td class="num s-status"><button class="btn sm" data-edit="${x.id}">Ubah</button></td></tr>`).join('')}
+            <tr class="total-row"><td colspan="3" class="num"><b>Total</b></td><td class="num" data-label="Total"><b class="neg">${rp(r.total)}</b></td><td></td></tr></tbody></table>`
             : '<div class="empty">Belum ada biaya tercatat bulan ini</div>'}
         </div>
         <div class="card"><h3>Per Jenis Biaya</h3>
