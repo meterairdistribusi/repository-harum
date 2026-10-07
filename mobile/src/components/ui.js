@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { ActivityIndicator, Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -59,11 +60,31 @@ export function Card({ children, style, onPress }) {
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
-export function Field({ label, error, style, ...props }) {
+export function Field({ label, error, style, secureTextEntry, ...props }) {
+  const [visible, setVisible] = useState(false);
   return (
     <View style={[{ marginBottom: 14 }, style]}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
-      <TextInput placeholderTextColor="#94A3B8" style={[styles.input, props.multiline && { minHeight: 90, textAlignVertical: 'top' }]} {...props} />
+      <View>
+        <TextInput
+          placeholderTextColor="#94A3B8"
+          style={[styles.input, props.multiline && { minHeight: 90, textAlignVertical: 'top' }, secureTextEntry && { paddingRight: 48 }]}
+          secureTextEntry={secureTextEntry && !visible}
+          autoCapitalize={secureTextEntry ? 'none' : props.autoCapitalize}
+          {...props}
+        />
+        {secureTextEntry ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={visible ? 'Sembunyikan kata sandi' : 'Lihat kata sandi'}
+            hitSlop={8}
+            onPress={() => setVisible((v) => !v)}
+            style={styles.eye}
+          >
+            <Ionicons name={visible ? 'eye-off-outline' : 'eye-outline'} size={20} color={colors.muted} />
+          </Pressable>
+        ) : null}
+      </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
@@ -279,6 +300,7 @@ export const styles = StyleSheet.create({
     backgroundColor: colors.white,
   },
   error: { color: colors.danger, marginTop: 4, fontSize: font.sm },
+  eye: { position: 'absolute', right: 4, top: 0, bottom: 0, width: 42, alignItems: 'center', justifyContent: 'center' },
   stepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
   stepBtn: { borderRadius: radius.sm, backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
   stepVal: { minWidth: 32, textAlign: 'center', fontSize: font.lg, fontWeight: '700', color: colors.ink },
