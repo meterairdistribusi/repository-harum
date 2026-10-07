@@ -1,6 +1,9 @@
 const db = require('../db');
 const settings = require('./settings');
 const payment = require('./payment');
+const shipping = require('./shipping');
+const catalog = require('./catalog');
+const realtime = require('../realtime');
 const { HttpError, orderCode, toInt, sqlDate } = require('../utils');
 
 const STATUS_LABEL = {
@@ -32,6 +35,7 @@ function nextStatuses(o) {
 
 function addHistory(orderId, status, note = '') {
   db.get().prepare('INSERT INTO order_history (order_id, status, note) VALUES (?, ?, ?)').run(orderId, status, note);
+  realtime.orderChanged(orderId); // dikirim setelah transaksi selesai
 }
 
 function findById(id) {
@@ -68,61 +72,78 @@ async function create(user, body) {
 
   const paymentMethod = body.payment_method;
   const channel = payment.validateMethod(paymentMethod, body.payment_channel);
+  const isCash = paymentMethod === 'cash';
+  if (isCash && !s.cash_enabled) throw new HttpError(400, 'Pembayaran tunai sedang tidak tersedia');
 
   let recipient = String(body.recipient || user.name || '').trim();
   let phone = String(body.phone || user.phone || '').trim();
   let address = String(body.address || '').trim();
+  let addressRow = null;
   if (body.address_id) {
-    const a = db.plain(db.get().prepare('SELECT * FROM addresses WHERE id = ? AND user_id = ?').get(body.address_id, user.id));
-    if (!a) throw new HttpError(400, 'Alamat tidak ditemukan');
-    recipient = a.recipient;
-    phone = a.phone;
-    address = a.address + (a.notes ? ` (${a.notes})` : '');
+    addressRow = db.plain(db.get().prepare('SELECT * FROM addresses WHERE id = ? AND user_id = ?').get(body.address_id, user.id));
+    if (!addressRow) throw new HttpError(400, 'Alamat tidak ditemukan');
+    recipient = addressRow.recipient;
+    phone = addressRow.phone;
+    address = addressRow.address + (addressRow.notes ? ` (${addressRow.notes})` : '');
   }
   if (deliveryMethod === 'delivery' && !address) throw new HttpError(400, 'Alamat pengiriman wajib diisi');
   if (!phone) throw new HttpError(400, 'Nomor HP wajib diisi');
 
+  // Ongkir dihitung lebih dulu (bisa memanggil layanan peta), di luar transaksi database
+  const subtotalEstimate = estimateSubtotal(items);
+  const ship = await shipping.quote({ subtotal: subtotalEstimate, method: deliveryMethod, address: addressRow, settings: s });
+
   const order = db.transaction((d) => {
-    const getProduct = d.prepare('SELECT * FROM products WHERE id = ?');
-    const lines = [];
-    const seen = new Map();
-    for (const it of items) {
-      const qty = toInt(it.quantity);
-      if (qty <= 0) throw new HttpError(400, 'Jumlah produk tidak valid');
-      const pid = toInt(it.product_id);
-      seen.set(pid, (seen.get(pid) || 0) + qty);
-    }
-    for (const [pid, qty] of seen) {
-      const p = db.plain(getProduct.get(pid));
-      if (!p || !p.is_active) throw new HttpError(400, 'Ada produk yang sudah tidak tersedia');
-      if (p.stock < qty) throw new HttpError(400, `Stok ${p.name} tinggal ${p.stock} ${p.unit}`);
-      lines.push({ product: p, quantity: qty, subtotal: p.price * qty });
-    }
+    const lines = resolveLines(items, { strict: true }).lines;
 
     const subtotal = lines.reduce((a, l) => a + l.subtotal, 0);
     if (subtotal < s.min_order) throw new HttpError(400, `Minimal belanja Rp${s.min_order.toLocaleString('id-ID')}`);
-    const fee = settings.deliveryFee(subtotal, deliveryMethod, s);
+    const fee = ship.fee;
     const total = subtotal + fee;
 
     const res = d
       .prepare(
-        `INSERT INTO orders (code, user_id, delivery_method, recipient, phone, address, notes, subtotal, delivery_fee, total, payment_method, payment_channel)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO orders (code, user_id, status, delivery_method, recipient, phone, address, notes, subtotal, delivery_fee, distance_km, total, payment_method, payment_channel, payment_provider)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(orderCode(), user.id, deliveryMethod, recipient, phone, deliveryMethod === 'delivery' ? address : '', String(body.notes || ''), subtotal, fee, total, paymentMethod, channel);
+      .run(
+        orderCode(),
+        user.id,
+        isCash ? 'processing' : 'pending_payment',
+        deliveryMethod,
+        recipient,
+        phone,
+        deliveryMethod === 'delivery' ? address : '',
+        String(body.notes || ''),
+        subtotal,
+        fee,
+        ship.distance_km,
+        total,
+        paymentMethod,
+        channel,
+        isCash ? 'cash' : ''
+      );
     const orderId = Number(res.lastInsertRowid);
 
     const insItem = d.prepare(
-      'INSERT INTO order_items (order_id, product_id, name, unit, image_url, price, quantity, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      `INSERT INTO order_items (order_id, product_id, variant_id, variant_name, name, unit, image_url, price, cost_price, quantity, subtotal)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
-    const decStock = d.prepare('UPDATE products SET stock = stock - ? WHERE id = ?');
+    const decProduct = d.prepare('UPDATE products SET stock = stock - ? WHERE id = ?');
+    const decVariant = d.prepare('UPDATE product_variants SET stock = stock - ? WHERE id = ?');
     for (const l of lines) {
-      insItem.run(orderId, l.product.id, l.product.name, l.product.unit, l.product.image_url, l.product.price, l.quantity, l.subtotal);
-      decStock.run(l.quantity, l.product.id);
+      insItem.run(orderId, l.product.id, l.variant?.id ?? null, l.variant?.name ?? '', l.name, l.product.unit, catalog.parseImages(l.product)[0] || '', l.price, l.cost_price, l.quantity, l.subtotal);
+      if (l.variant) decVariant.run(l.quantity, l.variant.id);
+      else decProduct.run(l.quantity, l.product.id);
     }
     addHistory(orderId, 'pending_payment', 'Pesanan dibuat');
+    if (isCash) {
+      addHistory(orderId, 'processing', deliveryMethod === 'delivery' ? 'Bayar tunai ke kurir saat pesanan sampai' : 'Bayar tunai di kasir saat mengambil pesanan');
+    }
     return findById(orderId);
   });
+
+  if (isCash) return detail(order);
 
   try {
     const items = db.get().prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id).map(db.plain);
@@ -137,11 +158,67 @@ async function create(user, body) {
   return detail(findById(order.id));
 }
 
+/**
+ * Cocokkan isi keranjang dengan katalog terbaru.
+ * Item: { product_id, variant_id?, quantity }. Sub menu yang punya pilihan wajib memilih salah satu.
+ * strict=true -> lempar error pada masalah pertama (dipakai saat membuat pesanan);
+ * strict=false -> kumpulkan masalah (dipakai untuk ringkasan checkout).
+ */
+function resolveLines(items, { strict }) {
+  const d = db.get();
+  const getProduct = d.prepare('SELECT * FROM products WHERE id = ?');
+  const getVariants = d.prepare('SELECT * FROM product_variants WHERE product_id = ? AND is_active = 1');
+  const merged = new Map();
+  for (const it of items) {
+    const qty = toInt(it.quantity);
+    if (qty <= 0) throw new HttpError(400, 'Jumlah produk tidak valid');
+    const key = `${toInt(it.product_id)}:${toInt(it.variant_id, 0)}`;
+    merged.set(key, (merged.get(key) || 0) + qty);
+  }
+  const lines = [];
+  const problems = [];
+  const fail = (message, product_id, variant_id) => {
+    if (strict) throw new HttpError(400, message);
+    problems.push({ product_id, variant_id, message });
+  };
+  for (const [key, quantity] of merged) {
+    const [pid, vid] = key.split(':').map(Number);
+    const product = db.plain(getProduct.get(pid));
+    if (!product || !product.is_active) {
+      fail('Ada produk yang sudah tidak tersedia', pid, vid);
+      continue;
+    }
+    const variants = getVariants.all(pid).map(db.plain);
+    let variant = null;
+    if (variants.length) {
+      variant = variants.find((v) => v.id === vid) || null;
+      if (!variant) {
+        fail(`Pilihan untuk ${product.name} sudah tidak tersedia, silakan pilih ulang`, pid, vid);
+        continue;
+      }
+    }
+    const src = variant || product;
+    const name = variant ? `${product.name} (${variant.name})` : product.name;
+    if (src.stock < quantity) fail(`Stok ${name} tinggal ${src.stock} ${product.unit}`, pid, vid);
+    lines.push({ product, variant, name, quantity, price: src.price, cost_price: src.cost_price, subtotal: src.price * quantity });
+  }
+  return { lines, problems };
+}
+
+/** Perkiraan subtotal (untuk menghitung gratis ongkir sebelum transaksi). */
+function estimateSubtotal(items) {
+  return resolveLines(items, { strict: false }).lines.reduce((a, l) => a + l.subtotal, 0);
+}
+
 function restoreStock(orderId) {
   const d = db.get();
-  const items = d.prepare('SELECT product_id, quantity FROM order_items WHERE order_id = ?').all(orderId);
-  const inc = d.prepare('UPDATE products SET stock = stock + ? WHERE id = ?');
-  for (const i of items) if (i.product_id) inc.run(i.quantity, i.product_id);
+  const items = d.prepare('SELECT product_id, variant_id, quantity FROM order_items WHERE order_id = ?').all(orderId);
+  const incProduct = d.prepare('UPDATE products SET stock = stock + ? WHERE id = ?');
+  const incVariant = d.prepare('UPDATE product_variants SET stock = stock + ? WHERE id = ?');
+  for (const i of items) {
+    if (i.variant_id) incVariant.run(i.quantity, i.variant_id);
+    else if (i.product_id) incProduct.run(i.quantity, i.product_id);
+  }
 }
 
 function cancel(orderId, note = 'Pesanan dibatalkan', paymentStatus) {
@@ -230,6 +307,11 @@ function updateStatus(orderId, status, note = '') {
   if (status === 'shipping' && o.delivery_method !== 'delivery') throw new HttpError(400, 'Pesanan ini diambil di toko');
   if (status === 'ready_pickup' && o.delivery_method !== 'pickup') throw new HttpError(400, 'Pesanan ini diantar');
   db.get().prepare(`UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?`).run(status, orderId);
+  if (status === 'completed' && o.payment_method === 'cash' && o.payment_status !== 'paid') {
+    // Pesanan tunai selesai = uang sudah diterima kurir/kasir
+    db.get().prepare(`UPDATE orders SET payment_status = 'paid', paid_at = datetime('now') WHERE id = ?`).run(orderId);
+    note = note || 'Pembayaran tunai diterima';
+  }
   addHistory(orderId, status, note);
   return findById(orderId);
 }
@@ -237,6 +319,7 @@ function updateStatus(orderId, status, note = '') {
 module.exports = {
   STATUS_LABEL,
   TRANSITIONS,
+  resolveLines,
   nextStatuses,
   create,
   detail,

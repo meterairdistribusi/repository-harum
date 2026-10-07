@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Harum Group",
-    "slug": "harum-group",
-    "scheme": "harumgroup",
+    "name": "Harum Market",
+    "slug": "harum-market",
+    "scheme": "harummarket",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,13 +14,17 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "id.harumgroup.app",
+      "bundleIdentifier": "id.harummarket.app",
       "infoPlist": {
-        "LSApplicationQueriesSchemes": ["gojek", "shopeeid", "gopay"]
+        "LSApplicationQueriesSchemes": [
+          "gojek",
+          "shopeeid",
+          "gopay"
+        ]
       }
     },
     "android": {
-      "package": "id.harumgroup.app",
+      "package": "id.harummarket.app",
       "adaptiveIcon": {
         "backgroundColor": "#0284C7",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -32,9 +36,20 @@
       "favicon": "./assets/favicon.png",
       "output": "single"
     },
-    "plugins": ["expo-router"],
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Harum Market memakai lokasi Anda untuk menandai alamat pengiriman dan menghitung ongkir."
+        }
+      ]
+    ],
     "extra": {
       "apiUrl": ""
+    },
+    "experiments": {
+      "baseUrl": "/app"
     }
   }
 }

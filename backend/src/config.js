@@ -5,12 +5,17 @@ const env = process.env;
 
 module.exports = {
   port: Number(env.PORT || 4000),
-  publicUrl: (env.PUBLIC_URL || `http://localhost:${env.PORT || 4000}`).replace(/\/$/, ''),
+  // RENDER_EXTERNAL_URL otomatis tersedia saat di-deploy ke Render
+  publicUrl: (env.PUBLIC_URL || env.RENDER_EXTERNAL_URL || `http://localhost:${env.PORT || 4000}`).replace(/\/$/, ''),
   jwtSecret: env.JWT_SECRET || 'dev-secret-harum-group',
   adminEmail: env.ADMIN_EMAIL || 'admin@harumgroup.id',
   adminPassword: env.ADMIN_PASSWORD || 'admin123',
   dbFile: path.resolve(__dirname, '..', env.DB_FILE || './data/harum.db'),
   uploadDir: path.resolve(__dirname, '..', 'uploads'),
+  maps: {
+    googleKey: env.GOOGLE_MAPS_API_KEY || '',
+    osrmUrl: (env.OSRM_URL || 'https://router.project-osrm.org').replace(/\/$/, ''),
+  },
   payment: {
     provider: (env.PAYMENT_PROVIDER || 'simulator').toLowerCase(),
     midtrans: {

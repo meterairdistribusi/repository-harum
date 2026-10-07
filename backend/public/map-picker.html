@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>Pilih Lokasi</title>
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+  <style>
+    html, body, #map { margin: 0; height: 100%; font-family: system-ui, -apple-system, Roboto, sans-serif; }
+    .search { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 1000; display: flex; gap: 6px; }
+    .search input { flex: 1; font-size: 16px; padding: 12px 14px; border: 0; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.18); }
+    .search button { font-size: 16px; font-weight: 700; border: 0; border-radius: 12px; padding: 0 16px; background: #0284C7; color: #fff; }
+    .results { position: absolute; top: 60px; left: 10px; right: 10px; z-index: 1000; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.18); max-height: 45%; overflow: auto; }
+    .results div { padding: 12px 14px; border-bottom: 1px solid #eee; font-size: 15px; }
+    .hint { position: absolute; bottom: 24px; left: 12px; right: 60px; z-index: 1000; background: rgba(15,23,42,.85); color: #fff; padding: 10px 12px; border-radius: 12px; font-size: 14px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <form class="search" id="search"><input id="q" placeholder="Cari jalan / kelurahan…" autocomplete="off"><button>Cari</button></form>
+  <div class="results" id="results" hidden></div>
+  <div class="hint" id="hint">Geser peta atau ketuk untuk menandai titik alamat</div>
+  <script src="/vendor/leaflet/leaflet.js"></script>
+  <script>
+    // Kirim titik terpilih ke aplikasi (WebView di HP, atau iframe di web)
+    function send(msg) {
+      const data = JSON.stringify(msg);
+      if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(data);
+      else if (window.parent !== window) window.parent.postMessage(data, '*');
+    }
+    const p = new URLSearchParams(location.search);
+    const hasPoint = p.get('lat') && p.get('lng');
+    const start = hasPoint ? [+p.get('lat'), +p.get('lng')] : [+(p.get('clat') || -6.2), +(p.get('clng') || 106.816)];
+    const map = L.map('map', { zoomControl: false }).setView(start, hasPoint ? 17 : 14);
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+    const marker = L.marker(start, { draggable: true }).addTo(map);
+    if (p.get('slat') && p.get('slng')) {
+      L.circleMarker([+p.get('slat'), +p.get('slng')], { radius: 9, color: '#F97316', fillOpacity: 0.9 }).addTo(map).bindTooltip('Toko', { permanent: true, direction: 'top' });
+    }
+
+    let timer;
+    function pick(latlng, label) {
+      marker.setLatLng(latlng);
+      const lat = +latlng.lat.toFixed(6), lng = +latlng.lng.toFixed(6);
+      send({ type: 'pick', lat, lng });
+      document.getElementById('hint').textContent = label || 'Titik ditandai ✓';
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&accept-language=id&lat=${lat}&lon=${lng}`)
+          .then((r) => r.json())
+          .then((d) => d.display_name && send({ type: 'address', lat, lng, address: d.display_name }))
+          .catch(() => {});
+      }, 600);
+    }
+    map.on('click', (e) => pick(e.latlng));
+    marker.on('dragend', () => pick(marker.getLatLng()));
+    if (hasPoint) send({ type: 'pick', lat: start[0], lng: start[1] });
+
+    document.getElementById('search').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const q = document.getElementById('q').value.trim();
+      const box = document.getElementById('results');
+      if (!q) return;
+      box.hidden = false;
+      box.innerHTML = '<div>Mencari…</div>';
+      try {
+        const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=id&limit=6&accept-language=id&q=${encodeURIComponent(q)}`);
+        const list = await r.json();
+        box.innerHTML = list.length ? '' : '<div>Tidak ditemukan</div>';
+        for (const it of list) {
+          const div = document.createElement('div');
+          div.textContent = it.display_name;
+          div.onclick = () => {
+            box.hidden = true;
+            const ll = L.latLng(+it.lat, +it.lon);
+            map.setView(ll, 17);
+            pick(ll);
+          };
+          box.appendChild(div);
+        }
+      } catch {
+        box.innerHTML = '<div>Pencarian gagal, periksa internet</div>';
+      }
+    });
+  </script>
+</body>
+</html>

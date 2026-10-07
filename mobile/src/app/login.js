@@ -34,7 +34,7 @@ export default function Login() {
         <View style={s.logo}>
           <Text style={{ fontSize: 56 }}>🧊</Text>
         </View>
-        <Text style={s.title}>Masuk ke Harum Group</Text>
+        <Text style={s.title}>Masuk ke Harum Market</Text>
         <Text style={s.sub}>Gunakan nomor HP yang sudah terdaftar.</Text>
         <Field label="Nomor HP" value={id} onChangeText={setId} placeholder="08xxxxxxxxxx" keyboardType="phone-pad" autoComplete="tel" autoCapitalize="none" />
         <Field label="Kata sandi" value={password} onChangeText={setPassword} placeholder="Minimal 6 karakter" secureTextEntry autoComplete="password" onSubmitEditing={submit} />

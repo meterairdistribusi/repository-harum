@@ -1,0 +1,20 @@
+# Deploy prototype gratis ke Render (https://render.com) -> New + -> Blueprint -> pilih repo ini.
+# Catatan paket gratis: server "tidur" bila 15 menit tidak dipakai (bangun ±1 menit), dan
+# database/foto upload kembali ke awal setiap deploy/restart — cocok untuk uji coba, bukan produksi.
+services:
+  - type: web
+    name: harum-market
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_EMAIL
+        value: admin@harumgroup.id
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: PAYMENT_PROVIDER
+        value: simulator
+      - key: DEMO_DATA
+        value: "1"

@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Empty, ErrorView, Loading, StatusBadge } from '../../components/ui';
 import { useAuth } from '../../context/auth';
+import { useVersion } from '../../context/realtime';
 import { api } from '../../lib/api';
 import { dateTime, rupiah } from '../../lib/format';
 import { colors, font } from '../../lib/theme';
@@ -24,11 +25,16 @@ export default function Orders() {
     }
   }, [user]);
 
+  const ordersV = useVersion('orders');
   useFocusEffect(
     useCallback(() => {
       load();
     }, [load])
   );
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loader async, setState terjadi setelah fetch
+    if (ordersV) load();
+  }, [ordersV, load]);
 
   if (!user)
     return <Empty icon="receipt-outline" title="Belum masuk" subtitle="Masuk untuk melihat riwayat pesanan Anda." action={<Button title="Masuk / Daftar" icon="log-in-outline" onPress={() => router.push('/login')} />} />;

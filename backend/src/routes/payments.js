@@ -123,7 +123,7 @@ pages.get(
         `<div class="card center"><div class="big-icon">${paid ? '✅' : order.status === 'cancelled' ? '❌' : '⏳'}</div>
           <h1>${paid ? 'Pembayaran Berhasil' : order.status === 'cancelled' ? 'Pesanan Dibatalkan' : 'Menunggu Pembayaran'}</h1>
           <div class="muted">${esc(order.code)}</div><div class="total">${rupiah(order.total)}</div>
-          <p class="muted">Silakan kembali ke aplikasi Harum Group.</p></div>`
+          <p class="muted">Silakan kembali ke aplikasi Harum Market.</p></div>`
       )
     );
   })

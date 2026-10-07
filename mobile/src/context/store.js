@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
+import { useVersion } from './realtime';
 
 const StoreContext = createContext(null);
 
@@ -20,10 +21,13 @@ export function StoreProvider({ children }) {
     }
   }, []);
 
+  // Muat ulang otomatis saat admin mengubah pengaturan toko / kategori
+  const storeV = useVersion('store');
+  const catV = useVersion('categories');
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- loader async, setState terjadi setelah fetch
     reload();
-  }, [reload]);
+  }, [reload, storeV, catV]);
 
   const value = useMemo(() => ({ store, categories, error, reload }), [store, categories, error, reload]);
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

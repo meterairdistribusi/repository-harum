@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Card, ErrorView, Loading, Row } from '../../components/ui';
+import { useVersion } from '../../context/realtime';
 import { api } from '../../lib/api';
 import { confirmAsync } from '../../lib/dialog';
 import { dateTime, payLabel, PAYMENT_METHOD, rupiah } from '../../lib/format';
@@ -32,7 +33,8 @@ export default function Payment() {
     }
   }, [code]);
 
-  // Cek status pembayaran berkala selama masih menunggu
+  // Status pembayaran: seketika lewat realtime, plus cek berkala selama masih menunggu
+  const ordersV = useVersion('orders');
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- loader async, setState terjadi setelah fetch
     load();
@@ -41,7 +43,7 @@ export default function Payment() {
       if (o && o.status !== 'pending_payment') clearInterval(timer.current);
     }, 5000);
     return () => clearInterval(timer.current);
-  }, [load]);
+  }, [load, ordersV]);
 
   const goOrder = () => router.replace(`/order/${code}`);
 

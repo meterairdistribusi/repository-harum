@@ -1,5 +1,5 @@
 {
-  "name": "harum-group-mobile",
+  "name": "harum-market-mobile",
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
@@ -11,6 +11,7 @@
     "expo-constants": "~57.0.21",
     "expo-haptics": "~57.0.3",
     "expo-linking": "~57.0.12",
+    "expo-location": "~57.0.20",
     "expo-router": "~57.0.25",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
@@ -28,7 +29,8 @@
     "web": "expo start --web",
     "build:android": "npx eas-cli@latest build -p android",
     "build:ios": "npx eas-cli@latest build -p ios",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "build:web": "expo export -p web --output-dir ../backend/public/app"
   },
   "private": true,
   "devDependencies": {

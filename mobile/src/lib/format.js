@@ -14,9 +14,13 @@ export function parseServerDate(s) {
   return s ? new Date(String(s).replace(' ', 'T') + 'Z') : null;
 }
 
-export const PAYMENT_METHOD = { qris: 'QRIS', bank_transfer: 'Transfer Bank', ewallet: 'E-Wallet' };
+export const PAYMENT_METHOD = { qris: 'QRIS', bank_transfer: 'Transfer Bank', ewallet: 'E-Wallet', cash: 'Tunai' };
 
-/** "QRIS" atau "Transfer Bank · BCA" */
+/** "QRIS", "Tunai" atau "Transfer Bank · BCA" */
 export function payLabel(o) {
-  return o.payment_method === 'qris' ? 'QRIS' : `${PAYMENT_METHOD[o.payment_method]} · ${o.payment_channel.toUpperCase()}`;
+  if (o.payment_method === 'qris' || o.payment_method === 'cash') return PAYMENT_METHOD[o.payment_method];
+  return `${PAYMENT_METHOD[o.payment_method]} · ${o.payment_channel.toUpperCase()}`;
 }
+
+/** 5.3 -> "5,3 km" */
+export const km = (n) => `${String(n).replace('.', ',')} km`;

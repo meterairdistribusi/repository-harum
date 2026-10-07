@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Card, Empty, ProductImage, QtyStepper } from '../../components/ui';
 import { useAuth } from '../../context/auth';
-import { useCart } from '../../context/cart';
+import { lineKey, useCart } from '../../context/cart';
 import { useStore } from '../../context/store';
 import { confirmAsync } from '../../lib/dialog';
 import { rupiah } from '../../lib/format';
@@ -33,8 +33,8 @@ export default function Cart() {
             </Text>
           </View>
         )}
-        {cart.items.map(({ product: p, quantity }) => (
-          <Card key={p.id} style={s.item}>
+        {cart.items.map(({ product: p, variant: v, quantity }) => (
+          <Card key={lineKey(p.id, v?.id)} style={s.item}>
             <Pressable onPress={() => router.push(`/product/${p.id}`)}>
               <ProductImage product={p} size={76} />
             </Pressable>
@@ -42,12 +42,18 @@ export default function Cart() {
               <Text style={s.name} numberOfLines={2}>
                 {p.name}
               </Text>
+              {v ? (
+                <Text style={s.variant}>
+                  {p.option_label ? `${p.option_label}: ` : ''}
+                  {v.name}
+                </Text>
+              ) : null}
               <Text style={s.price}>
-                {rupiah(p.price)} <Text style={s.unit}>/ {p.unit}</Text>
+                {rupiah((v || p).price)} <Text style={s.unit}>/ {p.unit}</Text>
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
-                <Text style={s.sub}>{rupiah(p.price * quantity)}</Text>
-                <QtyStepper compact value={quantity} max={p.stock} onChange={(n) => cart.setQty(p, n)} />
+                <Text style={s.sub}>{rupiah((v || p).price * quantity)}</Text>
+                <QtyStepper compact value={quantity} max={(v || p).stock} onChange={(n) => cart.setQty(p, v, n)} />
               </View>
             </View>
           </Card>
@@ -87,6 +93,7 @@ const s = StyleSheet.create({
   item: { flexDirection: 'row', gap: 12, padding: 12 },
   name: { fontSize: font.md, fontWeight: '700', color: colors.ink },
   price: { fontSize: font.sm, color: colors.muted },
+  variant: { alignSelf: 'flex-start', fontSize: font.sm, fontWeight: '700', color: colors.brandDark, backgroundColor: colors.brandSoft, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2, overflow: 'hidden' },
   unit: { fontSize: font.xs },
   sub: { fontSize: font.md, fontWeight: '800', color: colors.brandDark },
   clear: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, padding: 12 },

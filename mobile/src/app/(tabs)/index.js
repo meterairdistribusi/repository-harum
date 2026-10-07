@@ -1,12 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Dimensions, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Dimensions, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CartBar from '../../components/CartBar';
-import { ErrorView, ProductCard, SectionTitle } from '../../components/ui';
+import ShopProductCard from '../../components/ShopProductCard';
+import { ErrorView, SectionTitle } from '../../components/ui';
 import { useAuth } from '../../context/auth';
 import { useCart } from '../../context/cart';
+import { useVersion } from '../../context/realtime';
 import { useStore } from '../../context/store';
 import { api } from '../../lib/api';
 import { rupiah } from '../../lib/format';
@@ -31,6 +33,8 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(null);
 
+  const productsV = useVersion('products');
+  const bannersV = useVersion('banners');
   const load = useCallback(async () => {
     try {
       const [b, f] = await Promise.all([api('/banners'), api('/products?featured=1')]);
@@ -47,6 +51,11 @@ export default function Home() {
       load();
     }, [load])
   );
+  // Perubahan dari admin langsung tampil walau layar sedang dibuka
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loader async, setState terjadi setelah fetch
+    if (productsV || bannersV) load();
+  }, [productsV, bannersV, load]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -71,7 +80,7 @@ export default function Home() {
               {greeting()}
               {user ? `, ${user.name.split(' ')[0]}` : ''} 👋
             </Text>
-            <Text style={s.brand}>{store?.store_name || 'Harum Group'}</Text>
+            <Text style={s.brand}>{store?.store_name || 'Harum Market'}</Text>
             <Text style={s.tagline}>{store?.store_tagline}</Text>
           </View>
           <Pressable style={s.cartBtn} onPress={() => router.push('/cart')} accessibilityLabel="Buka keranjang">
@@ -120,7 +129,7 @@ export default function Home() {
             {categories.map((c) => (
               <Pressable key={c.id} style={({ pressed }) => [s.cat, pressed && { opacity: 0.8 }]} onPress={() => router.push({ pathname: '/products', params: { category: c.slug } })}>
                 <View style={[s.catIcon, { backgroundColor: c.color }]}>
-                  <Text style={{ fontSize: 34 }}>{c.icon}</Text>
+                  {c.image_url ? <Image source={{ uri: c.image_url }} style={s.catImg} resizeMode="cover" /> : <Text style={{ fontSize: 34 }}>{c.icon}</Text>}
                 </View>
                 <Text style={s.catName} numberOfLines={2}>
                   {c.name}
@@ -143,23 +152,9 @@ export default function Home() {
           <View style={s.grid}>
             {featured.map((p) => (
               <View key={p.id} style={s.gridItem}>
-                <ProductCard
-                  product={p}
-                  qty={cart.qtyOf(p.id)}
-                  onPress={() => router.push(`/product/${p.id}`)}
-                  onAdd={() => cart.add(p)}
-                  onQty={(q) => cart.setQty(p, q)}
-                />
+                <ShopProductCard product={p} />
               </View>
             ))}
-          </View>
-
-          {/* Tentang */}
-          <View style={s.about}>
-            <Text style={s.aboutTitle}>Harum Group — dari hulu ke hilir</Text>
-            <Text style={s.aboutText}>
-              Kami memproduksi sendiri es kristal higienis, mengolahnya menjadi es buah & es serut, hingga menyediakan frozen food dan makanan siap saji. Kualitas terjaga dari pabrik sampai ke tangan Anda.
-            </Text>
           </View>
         </View>
       </ScrollView>
@@ -186,13 +181,11 @@ const s = StyleSheet.create({
   bannerDeco: { position: 'absolute', right: -10, bottom: -18, fontSize: 110, opacity: 0.25 },
   catGrid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: '3.5%', rowGap: 14 },
   cat: { width: '31%', alignItems: 'center' },
-  catIcon: { width: '100%', aspectRatio: 1.15, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center' },
+  catIcon: { width: '100%', aspectRatio: 1.15, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  catImg: { width: '100%', height: '100%' },
   catName: { fontSize: font.sm, fontWeight: '700', color: colors.ink, textAlign: 'center', marginTop: 6 },
   promo: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.accentSoft, borderRadius: radius.md, padding: 14, marginTop: 20 },
   promoText: { flex: 1, fontSize: font.md, color: '#9A3412' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 12 },
   gridItem: { width: '48.5%' },
-  about: { marginTop: 28, padding: 18, borderRadius: radius.lg, backgroundColor: colors.brandSoft },
-  aboutTitle: { fontSize: font.md, fontWeight: '800', color: colors.brandDark },
-  aboutText: { fontSize: font.sm, color: colors.brandDark, marginTop: 6, lineHeight: 22 },
 });

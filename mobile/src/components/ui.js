@@ -99,10 +99,11 @@ export function QtyStepper({ value, onChange, max = 999, compact }) {
   );
 }
 
-/** Foto produk, atau ikon kategori berwarna bila belum ada foto. */
-export function ProductImage({ product, size, style }) {
+/** Foto produk → gambar kategori → ikon kategori berwarna (urutan cadangan). */
+export function ProductImage({ product, uri, size, style }) {
   const dim = size ? { width: size, height: size } : { width: '100%', aspectRatio: 1 };
-  if (product?.image_url) return <Image source={{ uri: product.image_url }} style={[dim, { borderRadius: radius.md }, style]} resizeMode="cover" />;
+  const src = uri || product?.image_url || product?.category_image;
+  if (src) return <Image source={{ uri: src }} style={[dim, { borderRadius: radius.md, backgroundColor: colors.brandSoft }, style]} resizeMode="cover" />;
   return (
     <View style={[dim, styles.placeholder, { backgroundColor: product?.category_color || colors.brandSoft }, style]}>
       <Text style={{ fontSize: size ? size * 0.5 : 56 }}>{product?.category_icon || '🧊'}</Text>
@@ -110,23 +111,45 @@ export function ProductImage({ product, size, style }) {
   );
 }
 
+/** Harga sub menu: "Rp3.000" atau "mulai Rp3.000" bila pilihannya berbeda harga. */
+export function priceLabel(p) {
+  return p.has_variants && p.price !== p.price_max ? `mulai ${rupiah(p.price)}` : rupiah(p.price);
+}
+
 export function ProductCard({ product, qty, onPress, onAdd, onQty, width }) {
   const soldOut = product.stock <= 0;
+  const choose = product.has_variants;
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.pcard, width && { width }, pressed && { opacity: 0.9 }]}>
       <ProductImage product={product} />
       <Text numberOfLines={2} style={styles.pname}>
         {product.name}
       </Text>
-      <Text style={styles.pprice}>
-        {rupiah(product.price)}
-        <Text style={styles.punit}> /{product.unit}</Text>
+      <Text style={styles.pprice} numberOfLines={1}>
+        {priceLabel(product)}
+        {choose ? null : <Text style={styles.punit}> /{product.unit}</Text>}
       </Text>
+      {choose ? (
+        <Text style={styles.pvariants} numberOfLines={1}>
+          {product.variants.length} pilihan {product.option_label ? product.option_label.toLowerCase() : ''}
+        </Text>
+      ) : null}
       <View style={{ marginTop: 'auto', paddingTop: 8 }}>
         {soldOut ? (
           <View style={[styles.addBtn, { backgroundColor: colors.line }]}>
             <Text style={[styles.addText, { color: colors.muted }]}>Stok habis</Text>
           </View>
+        ) : choose ? (
+          <Pressable
+            accessibilityLabel={`Pilih ${product.option_label || 'pilihan'} ${product.name}`}
+            onPress={() => {
+              tap();
+              onPress();
+            }}
+            style={[styles.addBtn, qty > 0 && { backgroundColor: colors.ok }]}
+          >
+            <Text style={styles.addText}>{qty > 0 ? `✓ ${qty} di keranjang` : `Pilih ${product.option_label || 'Pilihan'}`}</Text>
+          </Pressable>
         ) : qty > 0 ? (
           <QtyStepper compact value={qty} max={product.stock} onChange={onQty} />
         ) : (
@@ -264,6 +287,7 @@ export const styles = StyleSheet.create({
   pname: { fontSize: font.md, fontWeight: '700', color: colors.ink, marginTop: 10, minHeight: 44 },
   pprice: { fontSize: font.md, fontWeight: '800', color: colors.brandDark, marginTop: 4 },
   punit: { fontSize: font.xs, fontWeight: '500', color: colors.muted },
+  pvariants: { fontSize: font.xs, color: colors.muted, marginTop: 2 },
   addBtn: { height: 40, borderRadius: radius.sm, backgroundColor: colors.brand, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
   addText: { color: colors.white, fontWeight: '700', fontSize: font.sm },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill },
