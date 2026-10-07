@@ -259,3 +259,9 @@ label.inline{display:flex;align-items:center;gap:8px;margin:0;color:var(--ink)}
   .toolbar input:not([type=month]):not([type=date]){flex:1 1 100%}
   .toolbar select{flex:1 1 40%}
 }
+
+/* Lihat / sembunyikan kata sandi */
+.pw-wrap{position:relative;display:block}
+.pw-wrap input{padding-right:46px}
+.pw-toggle{position:absolute;right:4px;top:50%;transform:translateY(-50%);margin-top:3px;border:0;background:none;color:var(--muted);width:38px;height:38px;cursor:pointer;border-radius:8px;display:grid;place-items:center}
+.pw-toggle:hover{background:var(--brand-soft)}

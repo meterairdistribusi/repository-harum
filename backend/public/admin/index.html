@@ -16,7 +16,9 @@
       <h1>Harum Market</h1>
       <p class="muted">Panel Admin</p>
       <label>Email<input name="login" type="email" required autocomplete="username" placeholder="admin@harumgroup.id"></label>
-      <label>Kata sandi<input name="password" type="password" required autocomplete="current-password"></label>
+      <label>Kata sandi
+        <span class="pw-wrap"><input name="password" type="password" required autocomplete="current-password">
+          <button type="button" class="pw-toggle" aria-label="Lihat kata sandi" title="Lihat kata sandi"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label>
       <p class="error" id="login-error"></p>
       <button class="btn primary block" type="submit">Masuk</button>
     </form>
