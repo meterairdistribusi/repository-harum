@@ -1,4 +1,4 @@
-// Warna & ukuran dibuat besar dan kontras agar nyaman untuk semua umur.
+// Warna kontras & ukuran standar yang nyaman dibaca usia 16–60 tahun (tidak kebesaran).
 export const colors = {
   brand: '#0284C7',
   brandDark: '#075985',
@@ -19,15 +19,15 @@ export const colors = {
 };
 
 export const font = {
-  xs: 13,
-  sm: 15,
-  md: 17,
-  lg: 20,
-  xl: 24,
-  xxl: 30,
+  xs: 12,
+  sm: 14,
+  md: 15,
+  lg: 17,
+  xl: 20,
+  xxl: 24,
 };
 
-export const radius = { sm: 10, md: 16, lg: 22, pill: 999 };
+export const radius = { sm: 8, md: 12, lg: 16, pill: 999 };
 
 export const shadow = {
   shadowColor: '#0F172A',

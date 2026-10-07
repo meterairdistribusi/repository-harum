@@ -92,7 +92,12 @@
     localStorage.removeItem('harum_admin_token');
     showLogin();
   }
-  $('#logout').onclick = logout;
+  $$('[data-logout]').forEach(
+    (b) =>
+      (b.onclick = () => {
+        if (confirm('Keluar dari panel admin?')) logout();
+      })
+  );
 
   $('#login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -133,6 +138,8 @@
     banners: ['Banner Promo', renderBanners],
     expenses: ['Biaya Operasional', renderExpenses],
     customers: ['Pelanggan', renderCustomers],
+    reports: ['Laporan', renderReports],
+    data: ['Data & Backup', renderData],
     settings: ['Pengaturan Toko', renderSettings],
   };
 
@@ -141,7 +148,7 @@
     const [title, render] = PAGES[name] || PAGES.dashboard;
     $('#page-title').textContent = title;
     $$('#nav a').forEach((a) => a.classList.toggle('active', a.dataset.page === name));
-    $('#sidebar').classList.remove('open');
+    setMenu(false);
     closeModal();
     $('#page').innerHTML = '<div class="empty">Memuat…</div>';
     guard(render)($('#page'));
@@ -149,7 +156,13 @@
   window.addEventListener('hashchange', () => {
     if (token && me) route(); // abaikan saat masih di halaman login
   });
-  $('#menu-toggle').onclick = () => $('#sidebar').classList.toggle('open');
+  // Menu samping di HP/tablet: buka-tutup dengan tombol ☰, tutup dengan ketuk area gelap
+  function setMenu(open) {
+    $('#sidebar').classList.toggle('open', open);
+    $('#backdrop').hidden = !open;
+  }
+  $('#menu-toggle').onclick = () => setMenu(!$('#sidebar').classList.contains('open'));
+  $('#backdrop').onclick = () => setMenu(false);
 
   // Badge "perlu diproses" (cadangan bila koneksi realtime terputus: cek tiap 60 detik)
   async function refreshBadge() {
@@ -444,17 +457,17 @@
     const box = $('#order-table');
     if (!box) return;
     if (!r.data.length) return (box.innerHTML = '<div class="empty">Tidak ada pesanan</div>');
-    box.innerHTML = `<table><thead><tr><th>Kode</th><th>Waktu</th><th>Pelanggan</th><th>Pengiriman</th><th>Pembayaran</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>
+    box.innerHTML = `<table class="stack"><thead><tr><th>Kode</th><th>Waktu</th><th>Pelanggan</th><th>Pengiriman</th><th>Pembayaran</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>
       ${r.data
         .map(
           (o) => `<tr class="clickable" data-id="${o.id}">
-            <td><b>${esc(o.code)}</b><br><small class="muted">${o.item_count} item</small></td>
-            <td>${dt(o.created_at)}</td>
-            <td>${esc(o.recipient || o.customer_name)}<br><small class="muted">${esc(o.phone)}</small></td>
-            <td>${o.delivery_method === 'delivery' ? '🛵 Diantar' : '🏪 Ambil di toko'}</td>
-            <td>${PAY[o.payment_method]} <small class="muted">${esc(channelOf(o))}</small><br><small class="muted">${o.payment_status === 'paid' ? '✓ Lunas' : o.payment_status}</small></td>
-            <td class="num"><b>${rp(o.total)}</b></td>
-            <td>${badge(o.status)}</td></tr>`
+            <td class="s-head"><b>${esc(o.code)}</b> <small class="muted">${o.item_count} item</small></td>
+            <td data-label="Waktu">${dt(o.created_at)}</td>
+            <td data-label="Pelanggan"><span>${esc(o.recipient || o.customer_name)}<br><small class="muted">${esc(o.phone)}</small></span></td>
+            <td data-label="Kirim">${o.delivery_method === 'delivery' ? '🛵 Diantar' : '🏪 Ambil di toko'}</td>
+            <td data-label="Bayar"><span>${PAY[o.payment_method]} <small class="muted">${esc(channelOf(o))}</small><br><small class="muted">${o.payment_status === 'paid' ? '✓ Lunas' : o.payment_status}</small></span></td>
+            <td class="num" data-label="Total"><b>${rp(o.total)}</b></td>
+            <td class="s-status">${badge(o.status)}</td></tr>`
         )
         .join('')}</tbody></table>`;
     $$('tr[data-id]', box).forEach((tr) => tr.addEventListener('click', guard(() => showOrder(tr.dataset.id))));
@@ -886,12 +899,12 @@
     const load = guard(async () => {
       const r = await api('/admin/customers?q=' + encodeURIComponent($('#cust-q').value));
       $('#cust-table').innerHTML = r.data.length
-        ? `<table><thead><tr><th>Nama</th><th>No HP</th><th>Email</th><th>Terdaftar</th><th class="num">Pesanan</th><th class="num">Total Belanja</th><th></th></tr></thead><tbody>
+        ? `<table class="stack"><thead><tr><th>Nama</th><th>No HP</th><th>Email</th><th>Terdaftar</th><th class="num">Pesanan</th><th class="num">Total Belanja</th><th></th></tr></thead><tbody>
           ${r.data
             .map(
-              (c) => `<tr><td><b>${esc(c.name)}</b></td><td>${esc(c.phone)}</td><td>${esc(c.email || '-')}</td><td>${dt(c.created_at)}</td>
-            <td class="num">${c.order_count}</td><td class="num">${rp(c.total_spent)}</td>
-            <td class="num">${c.phone ? `<a class="btn sm" target="_blank" href="https://wa.me/${esc(c.phone.replace(/^0/, '62'))}">WhatsApp</a>` : ''}</td></tr>`
+              (c) => `<tr><td class="s-head"><b>${esc(c.name)}</b></td><td data-label="No HP">${esc(c.phone)}</td><td data-label="Email">${esc(c.email || '-')}</td><td data-label="Terdaftar">${dt(c.created_at)}</td>
+            <td class="num" data-label="Pesanan">${c.order_count}</td><td class="num" data-label="Total belanja">${rp(c.total_spent)}</td>
+            <td class="num s-status">${c.phone ? `<a class="btn sm" target="_blank" href="https://wa.me/${esc(c.phone.replace(/^0/, '62'))}">WhatsApp</a>` : ''}</td></tr>`
             )
             .join('')}</tbody></table>`
         : '<div class="empty">Belum ada pelanggan</div>';
@@ -1055,6 +1068,171 @@
       if (body.shipping_mode === 'distance' && !body.store_lat) return toast('Tandai lokasi toko di peta terlebih dahulu', true);
       await api('/admin/settings', { method: 'PUT', body });
       toast('Pengaturan disimpan');
+    });
+  }
+
+  // ------------------------------------------------------------ unduh file (laporan & backup)
+  async function downloadFile(path, fallbackName) {
+    const res = await fetch(API + path, { headers: { Authorization: 'Bearer ' + token } });
+    if (res.status === 401) {
+      logout();
+      throw new Error('Sesi berakhir');
+    }
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Gagal mengunduh');
+    const name = (res.headers.get('content-disposition') || '').match(/filename="([^"]+)"/)?.[1] || fallbackName;
+    const url = URL.createObjectURL(await res.blob());
+    const a = Object.assign(document.createElement('a'), { href: url, download: name });
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    return name;
+  }
+
+  // ------------------------------------------------------------ laporan
+  const REPORTS = [
+    ['laba-rugi', '📈 Laba Rugi', 'Omzet, modal (HPP), laba kotor, biaya operasional & laba bersih per bulan'],
+    ['penjualan', '🧾 Penjualan', 'Daftar semua pesanan: waktu, pelanggan, isi pesanan, cara bayar, status & total'],
+    ['produk', '📦 Produk Terjual', 'Jumlah terjual, omzet, modal & laba kotor per sub menu / pilihan'],
+    ['biaya', '💸 Biaya Operasional', 'Rincian biaya per tanggal & total per jenis biaya'],
+    ['lengkap', '📚 Laporan Lengkap', 'Semua laporan di atas dalam satu file'],
+  ];
+  const iso = (d) => d.toLocaleDateString('sv-SE');
+  const PRESETS = {
+    'Hari ini': () => [new Date(), new Date()],
+    'Bulan ini': () => [new Date(new Date().getFullYear(), new Date().getMonth(), 1), new Date()],
+    'Bulan lalu': () => [new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1), new Date(new Date().getFullYear(), new Date().getMonth(), 0)],
+    '3 bulan': () => [new Date(new Date().getFullYear(), new Date().getMonth() - 2, 1), new Date()],
+    'Tahun ini': () => [new Date(new Date().getFullYear(), 0, 1), new Date()],
+  };
+  let reportRange = PRESETS['Bulan ini']().map(iso);
+
+  async function renderReports(el) {
+    el.innerHTML = `
+      <div class="card">
+        <h3>Periode laporan</h3>
+        <div class="chips" id="presets">${Object.keys(PRESETS).map((k) => `<button class="chip" data-preset="${k}">${k}</button>`).join('')}</div>
+        <div class="grid2 narrow">
+          <label>Dari tanggal<input type="date" id="rep-from" value="${reportRange[0]}"></label>
+          <label>Sampai tanggal<input type="date" id="rep-to" value="${reportRange[1]}"></label>
+        </div>
+      </div>
+      <div class="report-grid">
+        ${REPORTS.map(
+          ([type, title, desc]) => `<div class="card report-card">
+            <h3>${title}</h3><p class="muted">${desc}</p>
+            <div class="report-actions">
+              <button class="btn xlsx" data-type="${type}" data-format="xlsx">⬇ Excel</button>
+              <button class="btn pdf" data-type="${type}" data-format="pdf">⬇ PDF</button>
+            </div></div>`
+        ).join('')}
+      </div>
+      <p class="muted">File Excel bisa diolah lagi (rumus, filter); PDF siap dicetak atau dikirim. Laba bersih = omzet − modal (HPP) − biaya operasional.</p>`;
+    const sync = () => (reportRange = [$('#rep-from').value, $('#rep-to').value]);
+    $('#rep-from').onchange = $('#rep-to').onchange = sync;
+    $$('[data-preset]').forEach(
+      (b) =>
+        (b.onclick = () => {
+          const [a, z] = PRESETS[b.dataset.preset]().map(iso);
+          $('#rep-from').value = a;
+          $('#rep-to').value = z;
+          sync();
+          $$('[data-preset]').forEach((x) => x.classList.toggle('active', x === b));
+        })
+    );
+    $$('[data-format]').forEach(
+      (b) =>
+        (b.onclick = guard(async () => {
+          sync();
+          const label = b.textContent;
+          b.disabled = true;
+          b.textContent = 'Menyiapkan…';
+          try {
+            const q = new URLSearchParams({ from: reportRange[0], to: reportRange[1], format: b.dataset.format });
+            const name = await downloadFile(`/admin/reports/${b.dataset.type}?${q}`, `laporan.${b.dataset.format}`);
+            toast('Terunduh: ' + name);
+          } finally {
+            b.disabled = false;
+            b.textContent = label;
+          }
+        }))
+    );
+  }
+
+  // ------------------------------------------------------------ data & backup
+  async function renderData(el) {
+    const d = (await api('/admin/demo-data')).data;
+    let lastBackup = null;
+    try {
+      lastBackup = localStorage.getItem('harum_last_backup');
+    } catch {}
+    const hasDemo = d.orders || d.expenses || d.demo_user;
+    el.innerHTML = `
+      <div class="card">
+        <h3>💾 Backup data</h3>
+        <p class="muted">Simpan salinan seluruh data (pesanan, sub menu, foto, pelanggan, biaya, pengaturan) ke file <b>.zip</b>. Simpan file ini di Google Drive / laptop. Lakukan rutin, misalnya setiap akhir hari.</p>
+        <div class="data-row"><button class="btn primary" id="do-backup">⬇ Unduh Backup Sekarang</button>
+          <span class="muted">${lastBackup ? 'Backup terakhir dari perangkat ini: ' + esc(lastBackup) : 'Belum pernah backup dari perangkat ini'}</span></div>
+      </div>
+      <div class="card">
+        <h3>♻️ Pulihkan dari backup</h3>
+        <p class="muted">Gunakan bila server bermasalah / data hilang. <b>Semua data saat ini akan diganti</b> dengan isi file backup.</p>
+        <p class="muted" style="font-size:13px">Catatan Render paket gratis: data kembali ke awal setiap server tidur (15 menit tanpa pengunjung) atau di-deploy ulang. Unduh backup setelah mengubah data, lalu pulihkan di sini bila data kembali ke awal.</p>
+        <div class="data-row"><input type="file" id="restore-file" accept=".zip,application/zip"><button class="btn danger" id="do-restore">Pulihkan Data</button></div>
+      </div>
+      <div class="card">
+        <h3>🧪 Data contoh (dummy)</h3>
+        ${
+          hasDemo
+            ? `<p>Masih ada data contoh: <b>${d.orders}</b> pesanan, <b>${d.expenses}</b> catatan biaya${d.demo_user ? ', dan akun pelanggan demo (081200000000)' : ''}.</p>`
+            : '<p class="pos"><b>✓ Tidak ada data pesanan/biaya contoh.</b></p>'
+        }
+        <label class="check"><input type="checkbox" id="demo-catalog"> Kosongkan juga katalog contoh (${d.categories} kategori, ${d.products} sub menu, ${d.banners} banner) agar bisa diisi produk asli</label>
+        <button class="btn danger" id="do-demo" ${hasDemo ? '' : ''}>Hapus Data Contoh</button>
+      </div>
+      <div class="card danger-zone">
+        <h3>⚠️ Mulai dari nol</h3>
+        <p class="muted">Hapus <b>semua</b> pesanan (${d.all_orders}) dan biaya operasional (${d.all_expenses}). Katalog, foto & pengaturan tetap. Disarankan unduh backup dulu.</p>
+        <label class="check"><input type="checkbox" id="reset-customers"> Hapus juga semua akun pelanggan (${d.customers})</label>
+        <div class="data-row"><input id="reset-confirm" placeholder="Ketik HAPUS untuk konfirmasi" style="max-width:260px"><button class="btn danger" id="do-reset">Hapus Semua Transaksi</button></div>
+      </div>`;
+
+    $('#do-backup').onclick = guard(async () => {
+      const name = await downloadFile('/admin/backup', 'harum-market-backup.zip');
+      try {
+        localStorage.setItem('harum_last_backup', new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }));
+      } catch {}
+      toast('Backup tersimpan: ' + name);
+      route();
+    });
+    $('#do-restore').onclick = guard(async () => {
+      const file = $('#restore-file').files[0];
+      if (!file) return toast('Pilih file backup (.zip) dulu', true);
+      if (!confirm(`Pulihkan data dari "${file.name}"?\n\nSemua data saat ini akan DIGANTI dengan isi backup.`)) return;
+      const fd = new FormData();
+      fd.append('backup', file);
+      const r = await api('/admin/restore', { method: 'POST', form: fd });
+      alert(`Data berhasil dipulihkan dari backup ${new Date(r.manifest.created_at).toLocaleString('id-ID')}:\n${r.counts.orders} pesanan, ${r.counts.products} sub menu, ${r.counts.customers} pelanggan, ${r.photos} foto.`);
+      try {
+        await api('/auth/me');
+        route();
+      } catch {
+        /* akun admin di backup berbeda -> diminta masuk lagi */
+      }
+    });
+    $('#do-demo').onclick = guard(async () => {
+      const catalog = $('#demo-catalog').checked;
+      if (!confirm(`Hapus data contoh${catalog ? ' DAN seluruh katalog contoh (kategori, sub menu, banner)' : ''}?\nPesanan & data asli Anda tidak ikut terhapus.`)) return;
+      const r = await api('/admin/demo-data/remove', { method: 'POST', body: { catalog } });
+      toast(`Dihapus: ${r.orders} pesanan contoh, ${r.expenses} biaya contoh${catalog ? `, ${r.products} sub menu` : ''}`);
+      route();
+    });
+    $('#do-reset').onclick = guard(async () => {
+      const confirmText = $('#reset-confirm').value.trim();
+      if (confirmText !== 'HAPUS') return toast('Ketik HAPUS (huruf besar) untuk konfirmasi', true);
+      const r = await api('/admin/reset', { method: 'POST', body: { confirm: confirmText, customers: $('#reset-customers').checked } });
+      toast(`Dihapus: ${r.orders} pesanan, ${r.expenses} biaya${r.customers ? `, ${r.customers} pelanggan` : ''}`);
+      route();
     });
   }
 

@@ -20,6 +20,8 @@ const EXPENSES = [
 function seedDemo() {
   const d = db.get();
   if (d.prepare(`SELECT 1 FROM orders WHERE code LIKE 'DEMO-%'`).get()) return false;
+  // Admin sudah menghapus data contoh -> jangan diisi lagi
+  if (d.prepare(`SELECT 1 FROM settings WHERE key = 'demo_data_disabled' AND value = '1'`).get()) return false;
   const lines = d
     .prepare(
       `SELECT p.id AS product_id, p.name AS pname, p.unit, v.id AS variant_id, v.name AS vname,

@@ -334,6 +334,7 @@ test('migrasi database versi lama (tanpa metode cash)', () => {
   old.close();
 
   const current = db.get();
+  const currentFile = db.currentFile();
   const migrated = db.open(file);
   try {
     assert.equal(migrated.prepare('SELECT code FROM orders').get().code, 'LAMA-1');
@@ -344,7 +345,7 @@ test('migrasi database versi lama (tanpa metode cash)', () => {
     assert.equal(migrated.prepare(`SELECT value FROM settings WHERE key = 'store_tagline'`).get(), undefined);
   } finally {
     migrated.close();
-    db._set(current);
+    db._set(current, currentFile);
   }
 });
 
@@ -494,4 +495,119 @@ test('data contoh prototype: sekali saja, laba bersih positif', async () => {
   assert.ok(s.year.profit > 0, 'toko contoh seharusnya untung');
   const demo = await call('POST', '/api/auth/login', { body: { login: '081200000000', password: 'demo123' } });
   assert.equal(demo.status, 200);
+});
+
+// ---------------------------------------------------------------- v1.3
+async function download(path, token = admin) {
+  const res = await fetch(base + path, { headers: { Authorization: `Bearer ${token}` } });
+  return { status: res.status, type: res.headers.get('content-type'), disposition: res.headers.get('content-disposition'), buf: Buffer.from(await res.arrayBuffer()) };
+}
+
+test('laporan Excel & PDF sesuai angka dashboard', async () => {
+  const ExcelJS = require('exceljs');
+  const today = new Date().toLocaleDateString('sv-SE');
+  const from = `${today.slice(0, 4)}-01-01`;
+  const stats = (await call('GET', '/api/admin/stats', { token: admin })).body.data;
+
+  const yearEnd = `${today.slice(0, 4)}-12-31`; // samakan dengan dashboard (setahun penuh)
+  const x = await download(`/api/admin/reports/laba-rugi?from=${from}&to=${yearEnd}&format=xlsx`);
+  assert.equal(x.status, 200);
+  assert.match(x.type, /spreadsheetml/);
+  assert.match(x.disposition, /\.xlsx"/);
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(x.buf);
+  const ws = wb.worksheets[0];
+  const totalRow = ws.getSheetValues().find((r) => r && r[1] === 'TOTAL');
+  // kolom: Periode, Pesanan, Omzet, Modal, Laba Kotor, Biaya, Laba Bersih
+  assert.equal(totalRow[3], stats.year.revenue);
+  assert.equal(totalRow[6], stats.year.expenses);
+  assert.equal(totalRow[7], stats.year.profit);
+
+  const full = await download(`/api/admin/reports/lengkap?from=${from}&to=${today}&format=xlsx`);
+  const wb2 = new ExcelJS.Workbook();
+  await wb2.xlsx.load(full.buf);
+  assert.deepEqual(wb2.worksheets.map((w) => w.name), ['Laba Rugi per Bulan', 'Daftar Pesanan', 'Penjualan per Produk', 'Biaya Operasional', 'Biaya Operasional per Jenis']);
+
+  for (const type of ['laba-rugi', 'penjualan', 'produk', 'biaya', 'lengkap']) {
+    const p = await download(`/api/admin/reports/${type}?from=${from}&to=${today}&format=pdf`);
+    assert.equal(p.status, 200, type);
+    assert.equal(p.type, 'application/pdf');
+    assert.equal(p.buf.subarray(0, 4).toString(), '%PDF');
+    assert.ok(p.buf.length > 1500);
+  }
+  assert.equal((await download('/api/admin/reports/ngawur?format=pdf')).status, 400);
+  assert.equal((await download(`/api/admin/reports/laba-rugi?from=${today}&to=2020-01-01`)).status, 400);
+  assert.equal((await download('/api/admin/reports/laba-rugi', customer)).status, 403);
+});
+
+test('hapus data contoh & cegah terisi ulang', async () => {
+  const { seedDemo } = require('../src/demo');
+  const before = (await call('GET', '/api/admin/demo-data', { token: admin })).body.data;
+  assert.ok(before.orders > 0 && before.expenses > 0 && before.demo_user);
+  const realOrders = before.all_orders - before.orders;
+
+  const r = await call('POST', '/api/admin/demo-data/remove', { token: admin, body: {} });
+  assert.equal(r.body.orders, before.orders);
+  const after = (await call('GET', '/api/admin/demo-data', { token: admin })).body.data;
+  assert.equal(after.orders, 0);
+  assert.equal(after.expenses, 0);
+  assert.equal(after.demo_user, false);
+  assert.equal(after.all_orders, realOrders); // pesanan asli tidak ikut terhapus
+  assert.ok(after.products > 0); // katalog tetap
+  assert.equal(seedDemo(), false); // tidak diisi ulang walau DEMO_DATA=1
+});
+
+test('backup lalu pulihkan: data & foto kembali seperti semula', async () => {
+  const fs = require('node:fs');
+  const AdmZip = require('adm-zip');
+  const snapshot = (await call('GET', '/api/admin/demo-data', { token: admin })).body.data;
+  const photo = (await call('GET', '/api/categories')).body.data.find((c) => c.image_url)?.image_url;
+  assert.ok(photo, 'butuh kategori bergambar dari tes sebelumnya');
+
+  const b = await download('/api/admin/backup');
+  assert.equal(b.status, 200);
+  assert.match(b.disposition, /harum-market-backup-\d{12}\.zip/);
+  const zip = new AdmZip(b.buf);
+  assert.ok(zip.getEntry('harum.db'));
+  assert.equal(JSON.parse(zip.getEntry('manifest.json').getData()).app, 'harum-market');
+  assert.ok(zip.getEntries().some((e) => e.entryName === 'uploads/' + photo.split('/').pop()));
+  assert.equal((await download('/api/admin/backup', customer)).status, 403);
+
+  // "Server gagal": data hilang semua
+  const reset = await call('POST', '/api/admin/reset', { token: admin, body: { confirm: 'HAPUS', customers: false } });
+  assert.equal(reset.status, 200);
+  assert.equal((await call('POST', '/api/admin/reset', { token: admin, body: { confirm: 'ya' } })).status, 400);
+  await call('POST', '/api/admin/demo-data/remove', { token: admin, body: { catalog: true } });
+  const empty = (await call('GET', '/api/admin/demo-data', { token: admin })).body.data;
+  assert.equal(empty.all_orders, 0);
+  assert.equal(empty.products, 0);
+  assert.equal((await fetch(photo)).status, 404);
+
+  // Pulihkan dari file backup
+  const fd = new FormData();
+  fd.append('backup', new Blob([b.buf], { type: 'application/zip' }), 'backup.zip');
+  const res = await fetch(base + '/api/admin/restore', { method: 'POST', headers: { Authorization: `Bearer ${admin}` }, body: fd });
+  const body = await res.json();
+  assert.equal(res.status, 200, JSON.stringify(body));
+  const restored = (await call('GET', '/api/admin/demo-data', { token: admin })).body.data;
+  assert.equal(restored.all_orders, snapshot.all_orders);
+  assert.equal(restored.products, snapshot.products);
+  assert.equal(restored.customers, snapshot.customers);
+  assert.equal((await fetch(photo)).status, 200);
+  // Login lama tetap berlaku & pelanggan bisa masuk lagi
+  assert.equal((await call('GET', '/api/me/orders', { token: customer })).status, 200);
+
+  // File palsu ditolak, data tidak berubah
+  const bad = new FormData();
+  bad.append('backup', new Blob([Buffer.from('bukan zip')]), 'x.zip');
+  const r2 = await fetch(base + '/api/admin/restore', { method: 'POST', headers: { Authorization: `Bearer ${admin}` }, body: bad });
+  assert.equal(r2.status, 400);
+  const other = new AdmZip();
+  other.addFile('manifest.json', Buffer.from(JSON.stringify({ app: 'lain' })));
+  other.addFile('harum.db', Buffer.from('x'));
+  const bad2 = new FormData();
+  bad2.append('backup', new Blob([other.toBuffer()]), 'x.zip');
+  assert.equal((await fetch(base + '/api/admin/restore', { method: 'POST', headers: { Authorization: `Bearer ${admin}` }, body: bad2 })).status, 400);
+  assert.equal((await call('GET', '/api/admin/demo-data', { token: admin })).body.data.all_orders, snapshot.all_orders);
+  void fs;
 });

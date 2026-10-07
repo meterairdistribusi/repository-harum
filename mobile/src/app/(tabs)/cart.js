@@ -36,7 +36,7 @@ export default function Cart() {
         {cart.items.map(({ product: p, variant: v, quantity }) => (
           <Card key={lineKey(p.id, v?.id)} style={s.item}>
             <Pressable onPress={() => router.push(`/product/${p.id}`)}>
-              <ProductImage product={p} size={76} />
+              <ProductImage product={p} size={64} />
             </Pressable>
             <View style={{ flex: 1, gap: 4 }}>
               <Text style={s.name} numberOfLines={2}>

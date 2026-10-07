@@ -16,5 +16,6 @@ services:
         sync: false
       - key: PAYMENT_PROVIDER
         value: simulator
+      # "1" = isi data contoh penjualan (untuk demo). "0" = tanpa data contoh.
       - key: DEMO_DATA
-        value: "1"
+        value: "0"

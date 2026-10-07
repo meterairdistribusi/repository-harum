@@ -151,10 +151,12 @@ CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
 `;
 
 let db;
+let dbFile = null;
 
 function open(file = config.dbFile) {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
   db = new DatabaseSync(file);
+  dbFile = file;
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   db.exec(SCHEMA);
   migrate(db);
@@ -233,9 +235,17 @@ function transaction(fn) {
 /** Ubah object null-prototype dari node:sqlite menjadi object biasa. */
 const plain = (row) => (row ? { ...row } : row);
 
-/** Khusus tes: kembalikan koneksi sebelumnya. */
-function _set(d) {
-  db = d;
+function close() {
+  if (db) db.close();
+  db = null;
 }
 
-module.exports = { open, get, transaction, plain, _set };
+const currentFile = () => dbFile;
+
+/** Khusus tes: kembalikan koneksi sebelumnya. */
+function _set(d, file = dbFile) {
+  db = d;
+  dbFile = file;
+}
+
+module.exports = { open, get, close, currentFile, transaction, plain, _set };

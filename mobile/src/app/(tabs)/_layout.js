@@ -5,7 +5,7 @@ import { colors } from '../../lib/theme';
 
 function icon(name) {
   return function TabIcon({ color, focused }) {
-    return <Ionicons name={focused ? name : `${name}-outline`} size={26} color={color} />;
+    return <Ionicons name={focused ? name : `${name}-outline`} size={22} color={color} />;
   };
 }
 
@@ -16,11 +16,11 @@ export default function TabsLayout() {
       screenOptions={{
         tabBarActiveTintColor: colors.brand,
         tabBarInactiveTintColor: '#94A3B8',
-        tabBarLabelStyle: { fontSize: 13, fontWeight: '700' },
-        tabBarStyle: { height: 68, paddingTop: 6, paddingBottom: 8, borderTopColor: colors.line },
+        tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
+        tabBarStyle: { height: 60, paddingTop: 4, paddingBottom: 6, borderTopColor: colors.line },
         headerShadowVisible: false,
         headerStyle: { backgroundColor: colors.bg },
-        headerTitleStyle: { fontWeight: '800', fontSize: 20, color: colors.ink },
+        headerTitleStyle: { fontWeight: '700', fontSize: 18, color: colors.ink },
         sceneStyle: { backgroundColor: colors.bg },
       }}
     >

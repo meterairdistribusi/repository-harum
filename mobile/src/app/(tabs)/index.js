@@ -84,7 +84,7 @@ export default function Home() {
             <Text style={s.tagline}>{store?.store_tagline}</Text>
           </View>
           <Pressable style={s.cartBtn} onPress={() => router.push('/cart')} accessibilityLabel="Buka keranjang">
-            <Ionicons name="cart" size={26} color={colors.brand} />
+            <Ionicons name="cart" size={22} color={colors.brand} />
             {cart.count > 0 && (
               <View style={s.dot}>
                 <Text style={s.dotText}>{cart.count}</Text>
@@ -95,14 +95,14 @@ export default function Home() {
 
         {/* Pencarian */}
         <Pressable style={s.search} onPress={() => router.push({ pathname: '/products', params: { focus: '1' } })}>
-          <Ionicons name="search" size={22} color={colors.muted} />
+          <Ionicons name="search" size={20} color={colors.muted} />
           <Text style={s.searchText}>Cari es kristal, nugget, nasi…</Text>
         </Pressable>
 
         {/* Status toko */}
         {store && (
           <View style={[s.status, { backgroundColor: store.is_open ? colors.okSoft : colors.dangerSoft }]}>
-            <Ionicons name={store.is_open ? 'storefront' : 'moon'} size={20} color={store.is_open ? colors.ok : colors.danger} />
+            <Ionicons name={store.is_open ? 'storefront' : 'moon'} size={16} color={store.is_open ? colors.ok : colors.danger} />
             <Text style={[s.statusText, { color: store.is_open ? '#166534' : '#991B1B' }]}>
               {store.is_open ? `Toko buka · ${store.opening_hours}` : 'Toko sedang tutup'}
             </Text>
@@ -125,22 +125,22 @@ export default function Home() {
         <View style={{ paddingHorizontal: 16 }}>
           {/* Kategori */}
           <SectionTitle title="Mau beli apa hari ini?" />
-          <View style={s.catGrid}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.catRow}>
             {categories.map((c) => (
-              <Pressable key={c.id} style={({ pressed }) => [s.cat, pressed && { opacity: 0.8 }]} onPress={() => router.push({ pathname: '/products', params: { category: c.slug } })}>
+              <Pressable key={c.id} style={({ pressed }) => [s.cat, pressed && { opacity: 0.7 }]} onPress={() => router.push({ pathname: '/products', params: { category: c.slug } })}>
                 <View style={[s.catIcon, { backgroundColor: c.color }]}>
-                  {c.image_url ? <Image source={{ uri: c.image_url }} style={s.catImg} resizeMode="cover" /> : <Text style={{ fontSize: 34 }}>{c.icon}</Text>}
+                  {c.image_url ? <Image source={{ uri: c.image_url }} style={s.catImg} resizeMode="cover" /> : <Text style={{ fontSize: 26 }}>{c.icon}</Text>}
                 </View>
                 <Text style={s.catName} numberOfLines={2}>
                   {c.name}
                 </Text>
               </Pressable>
             ))}
-          </View>
+          </ScrollView>
 
           {store?.free_delivery_min > 0 && (
             <View style={s.promo}>
-              <Text style={{ fontSize: 28 }}>🛵</Text>
+              <Text style={{ fontSize: 22 }}>🛵</Text>
               <Text style={s.promoText}>
                 Gratis ongkir untuk belanja minimal <Text style={{ fontWeight: '800' }}>{rupiah(store.free_delivery_min)}</Text>
               </Text>
@@ -165,27 +165,27 @@ export default function Home() {
 
 const s = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12 },
-  hello: { fontSize: font.md, color: colors.muted },
-  brand: { fontSize: font.xxl, fontWeight: '900', color: colors.brandDark, marginTop: 2 },
+  hello: { fontSize: font.sm, color: colors.muted },
+  brand: { fontSize: font.xxl, fontWeight: '800', color: colors.brandDark, marginTop: 2 },
   tagline: { fontSize: font.sm, color: colors.muted },
-  cartBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', ...shadow },
+  cartBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center', ...shadow },
   dot: { position: 'absolute', top: 4, right: 2, backgroundColor: colors.accent, borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   dotText: { color: colors.white, fontSize: 12, fontWeight: '800' },
-  search: { flexDirection: 'row', alignItems: 'center', gap: 10, margin: 16, marginBottom: 10, height: 56, borderRadius: radius.md, backgroundColor: colors.white, paddingHorizontal: 16, borderWidth: 1.5, borderColor: colors.line },
+  search: { flexDirection: 'row', alignItems: 'center', gap: 10, margin: 16, marginBottom: 10, height: 46, borderRadius: radius.md, backgroundColor: colors.white, paddingHorizontal: 14, borderWidth: 1, borderColor: colors.line },
   searchText: { fontSize: font.md, color: '#94A3B8' },
-  status: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 14, padding: 10, borderRadius: radius.sm },
-  statusText: { fontSize: font.sm, fontWeight: '700' },
-  banner: { height: 140, borderRadius: radius.lg, padding: 20, justifyContent: 'center', overflow: 'hidden' },
-  bannerTitle: { color: colors.white, fontSize: font.xl, fontWeight: '900', maxWidth: '75%' },
-  bannerSub: { color: 'rgba(255,255,255,.92)', fontSize: font.md, marginTop: 6, maxWidth: '75%' },
-  bannerDeco: { position: 'absolute', right: -10, bottom: -18, fontSize: 110, opacity: 0.25 },
-  catGrid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: '3.5%', rowGap: 14 },
-  cat: { width: '31%', alignItems: 'center' },
-  catIcon: { width: '100%', aspectRatio: 1.15, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  status: { flexDirection: 'row', alignItems: 'center', gap: 6, marginHorizontal: 16, marginBottom: 12, paddingVertical: 7, paddingHorizontal: 10, borderRadius: radius.sm },
+  statusText: { fontSize: font.xs, fontWeight: '700' },
+  banner: { height: 112, borderRadius: radius.lg, padding: 16, justifyContent: 'center', overflow: 'hidden' },
+  bannerTitle: { color: colors.white, fontSize: font.xl, fontWeight: '800', maxWidth: '75%' },
+  bannerSub: { color: 'rgba(255,255,255,.92)', fontSize: font.sm, marginTop: 4, maxWidth: '75%' },
+  bannerDeco: { position: 'absolute', right: -6, bottom: -14, fontSize: 84, opacity: 0.22 },
+  catRow: { gap: 4, minWidth: '100%', justifyContent: 'space-between' },
+  cat: { width: 66, alignItems: 'center' },
+  catIcon: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   catImg: { width: '100%', height: '100%' },
-  catName: { fontSize: font.sm, fontWeight: '700', color: colors.ink, textAlign: 'center', marginTop: 6 },
-  promo: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.accentSoft, borderRadius: radius.md, padding: 14, marginTop: 20 },
-  promoText: { flex: 1, fontSize: font.md, color: '#9A3412' },
+  catName: { fontSize: font.xs, fontWeight: '600', color: colors.ink, textAlign: 'center', marginTop: 6, lineHeight: 15 },
+  promo: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.accentSoft, borderRadius: radius.md, padding: 10, marginTop: 16 },
+  promoText: { flex: 1, fontSize: font.sm, color: '#9A3412' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 12 },
   gridItem: { width: '48.5%' },
 });
