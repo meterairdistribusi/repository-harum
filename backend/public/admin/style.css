@@ -265,3 +265,51 @@ label.inline{display:flex;align-items:center;gap:8px;margin:0;color:var(--ink)}
 .pw-wrap input{padding-right:46px}
 .pw-toggle{position:absolute;right:4px;top:50%;transform:translateY(-50%);margin-top:3px;border:0;background:none;color:var(--muted);width:38px;height:38px;cursor:pointer;border-radius:8px;display:grid;place-items:center}
 .pw-toggle:hover{background:var(--brand-soft)}
+
+/* v1.3.1 — kartu sub menu di HP: tabel pilihan jadi baris bertumpuk, tidak keluar kotak */
+.prod-title{min-width:0;flex:1;overflow-wrap:anywhere}
+.prod-head .btn{flex-shrink:0}
+@media (max-width:700px){
+  .prod-main{width:100%}
+  .vt:not(.edit){display:block}
+  .vt:not(.edit) thead{display:none}
+  .vt:not(.edit) tbody{display:block}
+  .vt:not(.edit) tr{display:grid;grid-template-columns:minmax(0,1fr) 92px;grid-template-areas:"name stock" "price stock" "cost stock" "profit stock";align-items:center;column-gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+  .vt:not(.edit) tr:last-child{border-bottom:0}
+  .vt:not(.edit) td{display:flex;justify-content:space-between;gap:8px;padding:1px 0;border:0;font-size:13px;text-align:right;min-width:0}
+  .vt:not(.edit) td[data-label]::before{content:attr(data-label);color:var(--muted);font-size:12px;text-align:left}
+  .vt:not(.edit) .v-name{grid-area:name;font-weight:700;font-size:14px;text-align:left;justify-content:flex-start}
+  .vt:not(.edit) .v-price{grid-area:price}
+  .vt:not(.edit) .v-cost{grid-area:cost}
+  .vt:not(.edit) .v-profit{grid-area:profit}
+  .vt:not(.edit) .v-stock{grid-area:stock;flex-direction:column;align-items:stretch;gap:2px}
+  .vt:not(.edit) .v-stock::before{text-align:center}
+  .vt:not(.edit) .stock-input{width:100%;margin:0;text-align:center}
+  .single{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:13px}
+  .single label.inline{grid-column:1/-1;justify-content:space-between}
+  .single label.inline .stock-input{width:110px}
+}
+
+.only-mobile{display:none}
+@media (max-width:700px){
+  .only-mobile{display:inline}
+  .hide-mobile{display:none!important}
+  .table-wrap:has(> table.stack-lines){overflow:visible}
+  table.stack-lines{min-width:0!important}
+  table.stack-lines thead{display:none}
+  table.stack-lines,table.stack-lines tbody,table.stack-lines tr,table.stack-lines td{display:block;width:100%}
+  table.stack-lines tr{position:relative;padding:12px 0;border-bottom:1px solid var(--line)}
+  table.stack-lines tr:last-child{border-bottom:0}
+  table.stack-lines td{border:0;padding:2px 0;display:flex;justify-content:space-between;gap:10px;text-align:right;font-size:14px}
+  table.stack-lines td[data-label]::before{content:attr(data-label);color:var(--muted);font-size:12px;font-weight:600}
+  table.stack-lines td.s-head{display:block;text-align:left;padding-right:72px;font-size:15px}
+  table.stack-lines td.s-head span{color:var(--muted);font-size:13px}
+  table.stack-lines td.s-desc{display:block;text-align:left;font-size:13px}
+  table.stack-lines td.s-desc:empty{display:none}
+  table.stack-lines td.s-status{position:absolute;top:10px;right:0;width:auto;padding:0}
+  table.stack-lines tr.total-row td:not([data-label]){display:none}
+  table.stack-lines tr.total-row td[data-label]::before{color:var(--ink);font-size:14px}
+}
+@media (max-width:700px){
+  .toolbar input[type=month]{flex:1 1 100%;max-width:none!important}
+}
